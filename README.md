@@ -19,7 +19,7 @@ This repository holds **infrastructure-as-code only**. Application code lives in
 .
 ├── README.md
 ├── .gitignore
-├── bootstrap/                     # one-time: S3 state bucket + DynamoDB lock (local state)
+├── bootstrap/                     # one-time: state backend + GitHub Actions IAM role (local state)
 ├── main.tf                        # provider, empty S3 backend, ECR module
 ├── variables.tf
 ├── outputs.tf
@@ -36,7 +36,7 @@ One root serves both environments. Switch env by re-init with the other `.conf` 
 
 ## Prerequisites
 
-- Terraform `>= 1.5`
+- Terraform `1.15.7`
 - AWS CLI configured for the **correct account** (`aws sts get-caller-identity`)
 - Default region: `ap-southeast-1`
 
@@ -61,7 +61,7 @@ terraform apply
 terraform output
 ```
 
-Note the outputs: `state_bucket`, `lock_table`, `region`. They must match `env-1.conf` and `env-2.conf`.
+Note the outputs: `state_bucket`, `lock_table`, `region`, `github_actions_role_arn`. The bucket and table must match `env-1.conf` and `env-2.conf`. Put `github_actions_role_arn` in the GitHub variable `AWS_ROLE_ARN` (a variable, not a secret). The role can only be assumed by `Bui-Hong-Kong/branch-protection-infra` on `refs/heads/main`.
 
 Bootstrap uses **local state** (gitignored). Keep that state file safe or re-import later if lost.
 

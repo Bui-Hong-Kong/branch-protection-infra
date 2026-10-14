@@ -18,6 +18,11 @@ output "account_id" {
   value       = data.aws_caller_identity.current.account_id
 }
 
+output "github_actions_role_arn" {
+  description = "IAM role ARN for GitHub Actions. Set this as the GitHub variable AWS_ROLE_ARN."
+  value       = aws_iam_role.github_actions.arn
+}
+
 output "backend_config_example" {
   description = "Example terraform init -backend-config flags for environment stacks"
   value       = <<-EOT
