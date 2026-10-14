@@ -19,8 +19,18 @@ output "account_id" {
 }
 
 output "github_actions_role_arn" {
-  description = "IAM role ARN for GitHub Actions. Set this as the GitHub variable AWS_ROLE_ARN."
+  description = "IAM role ARN for Terraform in branch-protection-infra. Set this as the GitHub variable AWS_ROLE_ARN on that repo."
   value       = aws_iam_role.github_actions.arn
+}
+
+output "ecr_push_role_arn" {
+  description = "IAM role ARN for pushing images to env-1. Set this as a GitHub variable on branch-protection."
+  value       = aws_iam_role.ecr_push.arn
+}
+
+output "ecr_copy_role_arn" {
+  description = "IAM role ARN for copying images from env-1 to env-2. Set this as a GitHub variable on branch-protection."
+  value       = aws_iam_role.ecr_copy.arn
 }
 
 output "backend_config_example" {
@@ -28,7 +38,7 @@ output "backend_config_example" {
   value       = <<-EOT
     -backend-config="bucket=${aws_s3_bucket.state.bucket}"
     -backend-config="region=${var.region}"
-    -backend-config="dynamodb_table=${aws_dynamodb_table.lock.name}"
+    -backend-config="use_lockfile=true"
     -backend-config="encrypt=true"
   EOT
 }

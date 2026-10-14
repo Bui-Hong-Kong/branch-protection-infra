@@ -9,7 +9,7 @@ This repository holds **infrastructure-as-code only**. Application code lives in
 | Area | Notes |
 | --- | --- |
 | ECR | One AWS account, two registries (`env-1`, `env-2`) |
-| State | Remote: S3 + DynamoDB lock (created by `bootstrap/`) |
+| State | Remote: S3 bucket and S3 lockfile (bucket created by `bootstrap/`) |
 | Image flow | Build/push to env-1; copy to env-2 later (e.g. `crane`) — no compute yet |
 | Compute | ECS / other runtimes — add later |
 
@@ -65,9 +65,11 @@ terraform output
 cd ..
 ```
 
-`env-1.conf` and `env-2.conf` are already filled for account `975305815837`. If `state_bucket` or `lock_table` differs, edit both `.conf` files before the next step.
+`env-1.conf` and `env-2.conf` are already filled for account `975305815837` and lock state with `use_lockfile`. If `state_bucket` differs, edit the bucket in both `.conf` files before the next step.
 
-Put `github_actions_role_arn` in the GitHub variable `AWS_ROLE_ARN` (a variable, not a secret). The role can only be assumed by `Bui-Hong-Kong/branch-protection-infra` on `refs/heads/main`.
+`github_actions_role_arn` is for Terraform in this repo. Put it in the GitHub variable `AWS_ROLE_ARN` on `branch-protection-infra` (a variable, not a secret). The role can only be assumed by that repo on `refs/heads/main`.
+
+`ecr_push_role_arn` and `ecr_copy_role_arn` belong on the app repo `branch-protection`. Push may only write `branch-protection-env-1` from `main`. Copy may read env-1 and write env-2, and only from GitHub Environment `env-2`.
 
 Bootstrap uses **local state** (gitignored). Keep that state file safe or re-import later if lost.
 

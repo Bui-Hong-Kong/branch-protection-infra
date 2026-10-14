@@ -23,7 +23,43 @@ variable "github_ref" {
 }
 
 variable "ecr_repository_names" {
-  description = "ECR repository names the GitHub Actions role may manage"
+  description = "ECR repository names the Terraform role may manage"
   type        = list(string)
   default     = ["branch-protection-env-1", "branch-protection-env-2"]
+}
+
+variable "image_repository" {
+  description = "GitHub repository allowed to push and copy images (org/name)"
+  type        = string
+  default     = "Bui-Hong-Kong/branch-protection"
+}
+
+variable "image_push_ref" {
+  description = "Git ref allowed to push images to env-1"
+  type        = string
+  default     = "refs/heads/main"
+}
+
+variable "image_copy_environment" {
+  description = "GitHub Environment allowed to copy images from env-1 to env-2"
+  type        = string
+  default     = "env-2"
+}
+
+variable "ecr_push_repository" {
+  description = "ECR repository the push role may write"
+  type        = string
+  default     = "branch-protection-env-1"
+}
+
+variable "ecr_copy_source_repository" {
+  description = "ECR repository the copy role may read"
+  type        = string
+  default     = "branch-protection-env-1"
+}
+
+variable "ecr_copy_destination_repository" {
+  description = "ECR repository the copy role may write"
+  type        = string
+  default     = "branch-protection-env-2"
 }
