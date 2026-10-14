@@ -40,34 +40,40 @@ One root serves both environments. Switch env by re-init with the other `.conf` 
 - AWS CLI configured for the **correct account** (`aws sts get-caller-identity`)
 - Default region: `ap-southeast-1`
 
-Do not commit secrets, access keys, or `bootstrap/terraform.tfvars`. `env/*.tfvars` only hold resource names. Prefer IAM roles / OIDC later for CI.
+Do not commit secrets, access keys, or `bootstrap/terraform.tfvars`. `env/*.tfvars` only hold resource names. CI assumes the OIDC role created by `bootstrap/`; there is no GitHub Actions workflow in this repo yet.
 
 ## Apply order
+
+Env-1 and env-2 share one root and stay in separate state files. One `apply` writes one state. Apply env-1, then re-init for env-2.
 
 ```text
 aws sts get-caller-identity
   → bootstrap/          (local state, once)
-  → repo root as env-1  (remote state)
-  → repo root as env-2  (remote state)
+  → repo root as env-1  (branch-protection/env-1/terraform.tfstate)
+  → repo root as env-2  (branch-protection/env-2/terraform.tfstate)
 ```
 
 ### 1. Bootstrap remote state (once)
 
+Defaults are `ap-southeast-1` and `name_prefix = branch-protection`. Copy `terraform.tfvars.example` only when changing those.
+
 ```bash
 cd bootstrap
-cp terraform.tfvars.example terraform.tfvars   # edit if needed
 terraform init
 terraform apply
 terraform output
+cd ..
 ```
 
-Note the outputs: `state_bucket`, `lock_table`, `region`, `github_actions_role_arn`. The bucket and table must match `env-1.conf` and `env-2.conf`. Put `github_actions_role_arn` in the GitHub variable `AWS_ROLE_ARN` (a variable, not a secret). The role can only be assumed by `Bui-Hong-Kong/branch-protection-infra` on `refs/heads/main`.
+`env-1.conf` and `env-2.conf` are already filled for account `975305815837`. If `state_bucket` or `lock_table` differs, edit both `.conf` files before the next step.
+
+Put `github_actions_role_arn` in the GitHub variable `AWS_ROLE_ARN` (a variable, not a secret). The role can only be assumed by `Bui-Hong-Kong/branch-protection-infra` on `refs/heads/main`.
 
 Bootstrap uses **local state** (gitignored). Keep that state file safe or re-import later if lost.
 
 ### 2. Environment stack (ECR only)
 
-From the repo root, one environment at a time:
+Run this from the repo root, one environment at a time. `cd ..` above returns here after bootstrap.
 
 ```bash
 terraform init -backend-config=env-1.conf
@@ -89,7 +95,7 @@ Optional: set `allowed_account_ids` in the env `.tfvars` to block apply against 
 
 | Question | Answer |
 | --- | --- |
-| Where are secrets stored? | Not in this repo — AWS CLI / IAM / future CI OIDC |
+| Where are secrets stored? | Not in this repo — AWS CLI locally, OIDC role from `bootstrap/` for CI |
 | Who can access? | Org members with repo access + least-privilege cloud roles |
 | Rotation / revocation | Rotate cloud credentials and CI tokens out-of-band |
 | Committed to git? | **No** — never commit real secrets or `*.tfstate` |
