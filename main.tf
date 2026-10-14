@@ -5,8 +5,20 @@ provider "aws" {
   default_tags {
     tags = {
       Project     = "branch-protection"
-      Environment = "env-1"
+      Environment = var.environment
       ManagedBy   = "terraform"
     }
   }
+}
+
+terraform {
+  backend "s3" {}
+}
+
+module "ecr" {
+  source = "./modules/services/ecr"
+
+  name             = var.repository_name
+  environment      = var.environment
+  keep_image_count = var.keep_image_count
 }

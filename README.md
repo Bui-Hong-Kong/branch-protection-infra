@@ -19,12 +19,20 @@ This repository holds **infrastructure-as-code only**. Application code lives in
 .
 ├── README.md
 ├── .gitignore
-├── bootstrap/                 # one-time: S3 state bucket + DynamoDB lock (local state)
-├── modules/ecr/               # reusable ECR repository
-└── environments/
-    ├── env-1/                 # remote state → branch-protection-env-1
-    └── env-2/                 # remote state → branch-protection-env-2
+├── bootstrap/                     # one-time: S3 state bucket + DynamoDB lock (local state)
+├── main.tf                        # provider, empty S3 backend, ECR module
+├── variables.tf
+├── outputs.tf
+├── versions.tf
+├── env-1.conf                     # backend-config for env-1
+├── env-2.conf                     # backend-config for env-2
+├── env/
+│   ├── env-1.tfvars
+│   └── env-2.tfvars
+└── modules/services/ecr/          # reusable ECR repository
 ```
+
+One root serves both environments. Switch env by re-init with the other `.conf` and `-var-file`. `bootstrap/` stays a separate root.
 
 ## Prerequisites
 
@@ -32,15 +40,15 @@ This repository holds **infrastructure-as-code only**. Application code lives in
 - AWS CLI configured for the **correct account** (`aws sts get-caller-identity`)
 - Default region: `ap-southeast-1`
 
-Do not commit secrets, access keys, or real `*.tfvars`. Prefer IAM roles / OIDC later for CI.
+Do not commit secrets, access keys, or `bootstrap/terraform.tfvars`. `env/*.tfvars` only hold resource names. Prefer IAM roles / OIDC later for CI.
 
 ## Apply order
 
 ```text
 aws sts get-caller-identity
-  → bootstrap/   (local state)
-  → environments/env-1  (remote state)
-  → environments/env-2  (remote state)
+  → bootstrap/          (local state, once)
+  → repo root as env-1  (remote state)
+  → repo root as env-2  (remote state)
 ```
 
 ### 1. Bootstrap remote state (once)
@@ -53,32 +61,29 @@ terraform apply
 terraform output
 ```
 
-Note the outputs: `state_bucket`, `lock_table`, `region`.
+Note the outputs: `state_bucket`, `lock_table`, `region`. They must match `env-1.conf` and `env-2.conf`.
 
 Bootstrap uses **local state** (gitignored). Keep that state file safe or re-import later if lost.
 
-### 2. Environment stacks (ECR only)
+### 2. Environment stack (ECR only)
 
-From each environment directory:
+From the repo root, one environment at a time:
 
 ```bash
-cd environments/env-1
-cp terraform.tfvars.example terraform.tfvars
-
-terraform init \
-  -backend-config="bucket=<state_bucket from bootstrap>" \
-  -backend-config="key=branch-protection/env-1/terraform.tfstate" \
-  -backend-config="region=<region>" \
-  -backend-config="dynamodb_table=<lock_table from bootstrap>" \
-  -backend-config="encrypt=true"
-
-terraform plan
-terraform apply
+terraform init -backend-config=env-1.conf
+terraform plan -var-file=env/env-1.tfvars
+terraform apply -var-file=env/env-1.tfvars
 ```
 
-Repeat for `environments/env-2` with key `branch-protection/env-2/terraform.tfstate`.
+Then switch to env-2. `-reconfigure` is required because this directory already has a backend:
 
-Optional: set `allowed_account_ids` in `terraform.tfvars` to block apply against the wrong account.
+```bash
+terraform init -reconfigure -backend-config=env-2.conf
+terraform plan -var-file=env/env-2.tfvars
+terraform apply -var-file=env/env-2.tfvars
+```
+
+Optional: set `allowed_account_ids` in the env `.tfvars` to block apply against the wrong account.
 
 ## Security check
 

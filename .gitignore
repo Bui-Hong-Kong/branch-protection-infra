@@ -10,9 +10,10 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 
-# Variable files with real values — keep *.tfvars.example
+# Local overrides — env/*.tfvars are committed (names only, no secrets)
 *.tfvars
 !*.tfvars.example
+!env/*.tfvars
 
 # Local env / secrets — do not commit real secrets
 .env

@@ -4,10 +4,14 @@ variable "region" {
   default     = "ap-southeast-1"
 }
 
+variable "environment" {
+  description = "Environment label passed to resources (env-1 or env-2)"
+  type        = string
+}
+
 variable "repository_name" {
   description = "ECR repository name for this environment"
   type        = string
-  default     = "branch-protection-env-2"
 }
 
 variable "allowed_account_ids" {
