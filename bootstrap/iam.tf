@@ -1,7 +1,8 @@
 locals {
-  github_subject     = "repo:${var.github_repository}:ref:${var.github_ref}"
-  image_push_subject = "repo:${var.image_repository}:ref:${var.image_push_ref}"
-  image_copy_subject = "repo:${var.image_repository}:environment:${var.image_copy_environment}"
+  # Repos use GitHub immutable OIDC subjects: repo:OWNER@OWNER_ID/REPO@REPO_ID:...
+  github_subject     = "repo:${var.github_repository_oidc}:ref:${var.github_ref}"
+  image_push_subject = "repo:${var.image_repository_oidc}:ref:${var.image_push_ref}"
+  image_copy_subject = "repo:${var.image_repository_oidc}:environment:${var.image_copy_environment}"
   ecr_repository_arns = [
     for name in var.ecr_repository_names :
     "arn:aws:ecr:${var.region}:${local.account_id}:repository/${name}"

@@ -71,6 +71,8 @@ cd ..
 
 `ecr_push_role_arn` and `ecr_copy_role_arn` belong on the app repo `branch-protection`. Push may only write `branch-protection-env-1` from `main`. Copy may read env-1 and write env-2, and only from GitHub Environment `env-2`.
 
+Both GitHub repos use immutable OIDC subjects (`repo:OWNER@OWNER_ID/REPO@REPO_ID:...`). Trust policies in `bootstrap/iam.tf` match that format.
+
 Bootstrap uses **local state** (gitignored). Keep that state file safe or re-import later if lost.
 
 ### 2. Environment stack (ECR only)
