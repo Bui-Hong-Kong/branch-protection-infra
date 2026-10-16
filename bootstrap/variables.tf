@@ -35,12 +35,10 @@ variable "ecr_services" {
   default = [
     "carts",
     "catalogue",
-    "catalogue-db",
     "orders",
     "payment",
     "shipping",
     "user",
-    "user-db",
     "frontend",
   ]
 }

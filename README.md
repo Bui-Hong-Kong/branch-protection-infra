@@ -71,7 +71,7 @@ cd ..
 
 `ecr_push_role_arn` and `ecr_copy_role_arn` belong on the app repo `branch-protection`. Push may write all `sockshop-*-env-1` repos from `main`. Copy may read those env-1 repos and write `sockshop-*-env-2`, and only from GitHub Environment `env-2`.
 
-Service IDs match the app (`carts`, `catalogue`, `catalogue-db`, `orders`, `payment`, `shipping`, `user`, `user-db`, `frontend`).
+Service IDs match the app (`carts`, `catalogue`, `orders`, `payment`, `shipping`, `user`, `frontend`).
 
 Both GitHub repos use immutable OIDC subjects (`repo:OWNER@OWNER_ID/REPO@REPO_ID:...`). Trust policies in `bootstrap/iam.tf` match that format.
 
@@ -114,7 +114,7 @@ sockshop-<service>-env-1   # push target
 sockshop-<service>-env-2   # promote target (crane copy)
 ```
 
-Nine services × two environments = eighteen repositories. Image tags follow the app workflow (`vX.Y.Z` stripped from `<service>-vX.Y.Z`, plus `latest`).
+Seven services × two environments = fourteen repositories. Image tags follow the app workflow (`vX.Y.Z` stripped from `<service>-vX.Y.Z`, plus `latest`).
 
 ## Status
 
