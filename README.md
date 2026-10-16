@@ -114,7 +114,7 @@ sockshop-<service>-env-1   # push target
 sockshop-<service>-env-2   # promote target (crane copy)
 ```
 
-Seven services × two environments = fourteen repositories. Image tags follow the app workflow (`vX.Y.Z` stripped from `<service>-vX.Y.Z`, plus `latest`).
+Seven services × two environments = fourteen repositories. Repositories use **IMMUTABLE** tags. Image tags follow the app workflow (`vX.Y.Z` stripped from `<service>-vX.Y.Z`); there is no `latest` tag.
 
 ## Status
 

@@ -9,9 +9,9 @@ variable "environment" {
 }
 
 variable "image_tag_mutability" {
-  description = "MUTABLE allows retag (useful for lab / crane copy)"
+  description = "IMMUTABLE blocks overwriting an existing tag with a different digest"
   type        = string
-  default     = "MUTABLE"
+  default     = "IMMUTABLE"
 }
 
 variable "scan_on_push" {
