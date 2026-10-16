@@ -9,9 +9,26 @@ variable "environment" {
   type        = string
 }
 
-variable "repository_name" {
-  description = "ECR repository name for this environment"
+variable "services" {
+  description = "Sock Shop service IDs (ECR: sockshop-<service>-<environment>)"
+  type        = list(string)
+  default = [
+    "carts",
+    "catalogue",
+    "catalogue-db",
+    "orders",
+    "payment",
+    "shipping",
+    "user",
+    "user-db",
+    "frontend",
+  ]
+}
+
+variable "repository_name_prefix" {
+  description = "Prefix for ECR repository names"
   type        = string
+  default     = "sockshop"
 }
 
 variable "allowed_account_ids" {

@@ -16,9 +16,10 @@ terraform {
 }
 
 module "ecr" {
-  source = "./modules/services/ecr"
+  source   = "./modules/services/ecr"
+  for_each = toset(var.services)
 
-  name             = var.repository_name
+  name             = "${var.repository_name_prefix}-${each.key}-${var.environment}"
   environment      = var.environment
   keep_image_count = var.keep_image_count
 }

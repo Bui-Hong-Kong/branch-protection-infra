@@ -8,9 +8,9 @@ This repository holds **infrastructure-as-code only**. Application code lives in
 
 | Area | Notes |
 | --- | --- |
-| ECR | One AWS account, two registries (`env-1`, `env-2`) |
+| ECR | One AWS account; per Sock Shop service × env (`sockshop-<service>-env-1/2`) |
 | State | Remote: S3 bucket and S3 lockfile (bucket created by `bootstrap/`) |
-| Image flow | Build/push to env-1; copy to env-2 later (e.g. `crane`) — no compute yet |
+| Image flow | Build/push each service to env-1; crane-copy same tag to env-2 — no compute yet |
 | Compute | ECS / other runtimes — add later |
 
 ## Layout
@@ -69,7 +69,9 @@ cd ..
 
 `github_actions_role_arn` is for Terraform in this repo. Put it in the GitHub variable `AWS_ROLE_ARN` on `branch-protection-infra` (a variable, not a secret). The role can only be assumed by that repo on `refs/heads/main`.
 
-`ecr_push_role_arn` and `ecr_copy_role_arn` belong on the app repo `branch-protection`. Push may only write `branch-protection-env-1` from `main`. Copy may read env-1 and write env-2, and only from GitHub Environment `env-2`.
+`ecr_push_role_arn` and `ecr_copy_role_arn` belong on the app repo `branch-protection`. Push may write all `sockshop-*-env-1` repos from `main`. Copy may read those env-1 repos and write `sockshop-*-env-2`, and only from GitHub Environment `env-2`.
+
+Service IDs match the app (`carts`, `catalogue`, `catalogue-db`, `orders`, `payment`, `shipping`, `user`, `user-db`, `frontend`).
 
 Both GitHub repos use immutable OIDC subjects (`repo:OWNER@OWNER_ID/REPO@REPO_ID:...`). Trust policies in `bootstrap/iam.tf` match that format.
 
@@ -105,6 +107,15 @@ Optional: set `allowed_account_ids` in the env `.tfvars` to block apply against 
 | Committed to git? | **No** — never commit real secrets or `*.tfstate` |
 | State bucket | Private, SSE, versioning, block public access (see `bootstrap/`) |
 
+## ECR naming
+
+```text
+sockshop-<service>-env-1   # push target
+sockshop-<service>-env-2   # promote target (crane copy)
+```
+
+Nine services × two environments = eighteen repositories. Image tags follow the app workflow (`vX.Y.Z` stripped from `<service>-vX.Y.Z`, plus `latest`).
+
 ## Status
 
-ECR-only scaffold. Compute and CI `terraform apply` workflows come later.
+ECR-only (per-service Sock Shop repos). Compute and CI `terraform apply` workflows come later.

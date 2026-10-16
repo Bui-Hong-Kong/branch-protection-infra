@@ -29,10 +29,26 @@ variable "github_ref" {
   default     = "refs/heads/main"
 }
 
-variable "ecr_repository_names" {
-  description = "ECR repository names the Terraform role may manage"
+variable "ecr_services" {
+  description = "Sock Shop service IDs used to build ECR repository names"
   type        = list(string)
-  default     = ["branch-protection-env-1", "branch-protection-env-2"]
+  default = [
+    "carts",
+    "catalogue",
+    "catalogue-db",
+    "orders",
+    "payment",
+    "shipping",
+    "user",
+    "user-db",
+    "frontend",
+  ]
+}
+
+variable "ecr_repository_name_prefix" {
+  description = "Prefix for ECR repository names (sockshop-<service>-env-N)"
+  type        = string
+  default     = "sockshop"
 }
 
 variable "image_repository" {
@@ -58,22 +74,4 @@ variable "image_copy_environment" {
   description = "GitHub Environment allowed to copy images from env-1 to env-2"
   type        = string
   default     = "env-2"
-}
-
-variable "ecr_push_repository" {
-  description = "ECR repository the push role may write"
-  type        = string
-  default     = "branch-protection-env-1"
-}
-
-variable "ecr_copy_source_repository" {
-  description = "ECR repository the copy role may read"
-  type        = string
-  default     = "branch-protection-env-1"
-}
-
-variable "ecr_copy_destination_repository" {
-  description = "ECR repository the copy role may write"
-  type        = string
-  default     = "branch-protection-env-2"
 }

@@ -3,13 +3,30 @@ locals {
   github_subject     = "repo:${var.github_repository_oidc}:ref:${var.github_ref}"
   image_push_subject = "repo:${var.image_repository_oidc}:ref:${var.image_push_ref}"
   image_copy_subject = "repo:${var.image_repository_oidc}:environment:${var.image_copy_environment}"
+
+  ecr_env1_names = [
+    for s in var.ecr_services : "${var.ecr_repository_name_prefix}-${s}-env-1"
+  ]
+  ecr_env2_names = [
+    for s in var.ecr_services : "${var.ecr_repository_name_prefix}-${s}-env-2"
+  ]
+  ecr_repository_names = concat(local.ecr_env1_names, local.ecr_env2_names)
   ecr_repository_arns = [
-    for name in var.ecr_repository_names :
+    for name in local.ecr_repository_names :
     "arn:aws:ecr:${var.region}:${local.account_id}:repository/${name}"
   ]
-  ecr_push_repository_arn  = "arn:aws:ecr:${var.region}:${local.account_id}:repository/${var.ecr_push_repository}"
-  ecr_copy_source_arn      = "arn:aws:ecr:${var.region}:${local.account_id}:repository/${var.ecr_copy_source_repository}"
-  ecr_copy_destination_arn = "arn:aws:ecr:${var.region}:${local.account_id}:repository/${var.ecr_copy_destination_repository}"
+  ecr_push_repository_arns = [
+    for name in local.ecr_env1_names :
+    "arn:aws:ecr:${var.region}:${local.account_id}:repository/${name}"
+  ]
+  ecr_copy_source_arns = [
+    for name in local.ecr_env1_names :
+    "arn:aws:ecr:${var.region}:${local.account_id}:repository/${name}"
+  ]
+  ecr_copy_destination_arns = [
+    for name in local.ecr_env2_names :
+    "arn:aws:ecr:${var.region}:${local.account_id}:repository/${name}"
+  ]
 }
 
 resource "aws_iam_openid_connect_provider" "github" {
@@ -158,7 +175,7 @@ data "aws_iam_policy_document" "ecr_push" {
       "ecr:CompleteLayerUpload",
       "ecr:PutImage",
     ]
-    resources = [local.ecr_push_repository_arn]
+    resources = local.ecr_push_repository_arns
   }
 }
 
@@ -218,7 +235,7 @@ data "aws_iam_policy_document" "ecr_copy" {
       "ecr:BatchGetImage",
       "ecr:GetDownloadUrlForLayer",
     ]
-    resources = [local.ecr_copy_source_arn]
+    resources = local.ecr_copy_source_arns
   }
 
   statement {
@@ -233,7 +250,7 @@ data "aws_iam_policy_document" "ecr_copy" {
       "ecr:CompleteLayerUpload",
       "ecr:PutImage",
     ]
-    resources = [local.ecr_copy_destination_arn]
+    resources = local.ecr_copy_destination_arns
   }
 }
 
