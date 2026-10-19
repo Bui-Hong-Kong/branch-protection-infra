@@ -40,6 +40,7 @@ variable "ecr_services" {
     "shipping",
     "user",
     "frontend",
+    "test-terraform",
   ]
 }
 

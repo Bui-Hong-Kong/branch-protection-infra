@@ -20,6 +20,7 @@ variable "services" {
     "shipping",
     "user",
     "frontend",
+    "test-terraform",
   ]
 }
 
