@@ -12,6 +12,7 @@ This repository holds **infrastructure-as-code only**. Application code lives in
 | State | Remote: S3 bucket and S3 lockfile (bucket created by `bootstrap/`) |
 | Image flow | Build/push each service to env-1; crane-copy same tag to env-2 — no compute yet |
 | Compute | ECS / other runtimes — add later |
+| CI | PR checks for Terraform; apply only via manual workflow on `main` |
 
 ## Layout
 
@@ -19,43 +20,53 @@ This repository holds **infrastructure-as-code only**. Application code lives in
 .
 ├── README.md
 ├── .gitignore
-├── bootstrap/                     # one-time: state backend + GitHub Actions IAM role (local state)
-├── main.tf                        # provider, empty S3 backend, ECR module
+├── .checkov.yaml
+├── .github/
+│   ├── ruleset-main.json          # branch ruleset for main (import in GitHub UI / API)
+│   └── workflows/
+│       ├── 01-terraform-check.yml # PR: fmt / validate / Checkov
+│       └── 02-terraform-apply.yml # main: workflow_dispatch apply (OIDC)
+├── bootstrap/                     # one-time: state backend + GitHub Actions IAM (local state)
+├── main.tf
 ├── variables.tf
 ├── outputs.tf
 ├── versions.tf
-├── env-1.conf                     # backend-config for env-1
-├── env-2.conf                     # backend-config for env-2
+├── env-1.conf
+├── env-2.conf
 ├── env/
 │   ├── env-1.tfvars
 │   └── env-2.tfvars
-└── modules/services/ecr/          # reusable ECR repository
+└── modules/services/ecr/
 ```
 
 One root serves both environments. Switch env by re-init with the other `.conf` and `-var-file`. `bootstrap/` stays a separate root.
 
+## Branch protection and CI
+
+`main` is protected by ruleset `protect-main` (see `.github/ruleset-main.json`):
+
+- No direct push / force-push / delete
+- Changes via pull request
+- Required checks: `Format (terraform)`, `Validate (root)`, `Validate (bootstrap)`, `Security (terraform)`
+- Branch must be up to date with `main`
+
+**Apply to AWS** is not automatic on merge. After merging to `main`, run **Actions → 2. Terraform apply** (`workflow_dispatch`) and choose `env-1`, `env-2`, or `both`.
+
+Set repo variable (not a secret) `AWS_ROLE_ARN` = `terraform output -raw github_actions_role_arn` from `bootstrap/` (OIDC role `branch-protection-gha-terraform`).
+
+Enable the ruleset only after the check workflow has run once on a PR (so the status check names exist).
+
 ## Prerequisites
 
 - Terraform `1.15.7`
-- AWS CLI configured for the **correct account** (`aws sts get-caller-identity`)
+- AWS CLI for local bootstrap only
 - Default region: `ap-southeast-1`
 
-Do not commit secrets, access keys, or `bootstrap/terraform.tfvars`. `env/*.tfvars` only hold resource names. CI assumes the OIDC role created by `bootstrap/`; there is no GitHub Actions workflow in this repo yet.
+Do not commit secrets, access keys, or `bootstrap/terraform.tfvars`. `env/*.tfvars` only hold resource names.
 
 ## Apply order
 
-Env-1 and env-2 share one root and stay in separate state files. One `apply` writes one state. Apply env-1, then re-init for env-2.
-
-```text
-aws sts get-caller-identity
-  → bootstrap/          (local state, once)
-  → repo root as env-1  (branch-protection/env-1/terraform.tfstate)
-  → repo root as env-2  (branch-protection/env-2/terraform.tfstate)
-```
-
-### 1. Bootstrap remote state (once)
-
-Defaults are `ap-southeast-1` and `name_prefix = branch-protection`. Copy `terraform.tfvars.example` only when changing those.
+### 1. Bootstrap remote state (once, local)
 
 ```bash
 cd bootstrap
@@ -65,43 +76,33 @@ terraform output
 cd ..
 ```
 
-`env-1.conf` and `env-2.conf` are already filled for account `975305815837` and lock state with `use_lockfile`. If `state_bucket` differs, edit the bucket in both `.conf` files before the next step.
+`env-1.conf` and `env-2.conf` are filled for account `975305815837` with `use_lockfile`.
 
-`github_actions_role_arn` is for Terraform in this repo. Put it in the GitHub variable `AWS_ROLE_ARN` on `branch-protection-infra` (a variable, not a secret). The role can only be assumed by that repo on `refs/heads/main`.
+`github_actions_role_arn` → GitHub variable `AWS_ROLE_ARN` on **this** repo. Trust: immutable OIDC subject, `refs/heads/main` only.
 
-`ecr_push_role_arn` and `ecr_copy_role_arn` belong on the app repo `branch-protection`. Push may write all `sockshop-*-env-1` repos from `main`. Copy may read those env-1 repos and write `sockshop-*-env-2`, and only from GitHub Environment `env-2`.
+`ecr_push_role_arn` / `ecr_copy_role_arn` → app repo `branch-protection` variables.
 
-Service IDs match the app (`carts`, `catalogue`, `orders`, `payment`, `shipping`, `user`, `frontend`).
+Bootstrap uses **local state** (gitignored).
 
-Both GitHub repos use immutable OIDC subjects (`repo:OWNER@OWNER_ID/REPO@REPO_ID:...`). Trust policies in `bootstrap/iam.tf` match that format.
+### 2. Environment stacks (prefer GitHub Actions)
 
-Bootstrap uses **local state** (gitignored). Keep that state file safe or re-import later if lost.
+On `main`: **2. Terraform apply** → `both` (or one env).
 
-### 2. Environment stack (ECR only)
-
-Run this from the repo root, one environment at a time. `cd ..` above returns here after bootstrap.
+Local equivalent (optional):
 
 ```bash
-terraform init -backend-config=env-1.conf
-terraform plan -var-file=env/env-1.tfvars
+terraform init -reconfigure -backend-config=env-1.conf
 terraform apply -var-file=env/env-1.tfvars
-```
 
-Then switch to env-2. `-reconfigure` is required because this directory already has a backend:
-
-```bash
 terraform init -reconfigure -backend-config=env-2.conf
-terraform plan -var-file=env/env-2.tfvars
 terraform apply -var-file=env/env-2.tfvars
 ```
-
-Optional: set `allowed_account_ids` in the env `.tfvars` to block apply against the wrong account.
 
 ## Security check
 
 | Question | Answer |
 | --- | --- |
-| Where are secrets stored? | Not in this repo — AWS CLI locally, OIDC role from `bootstrap/` for CI |
+| Where are secrets stored? | Not in this repo — OIDC role from `bootstrap/` for CI |
 | Who can access? | Org members with repo access + least-privilege cloud roles |
 | Rotation / revocation | Rotate cloud credentials and CI tokens out-of-band |
 | Committed to git? | **No** — never commit real secrets or `*.tfstate` |
@@ -118,4 +119,4 @@ Seven services × two environments = fourteen repositories. Repositories use **I
 
 ## Status
 
-ECR-only (per-service Sock Shop repos). Compute and CI `terraform apply` workflows come later.
+ECR-only stacks. PR Terraform gates + manual apply on `main` via OIDC.

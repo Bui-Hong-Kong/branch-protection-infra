@@ -1,0 +1,18 @@
+# Lab-oriented skips for intentional scaffold choices.
+compact: true
+framework:
+  - terraform
+quiet: true
+download-external-modules: false
+skip-check:
+  # AES256 at rest is enough for this lab; KMS CMK not required.
+  - CKV_AWS_136
+  # ecr:GetAuthorizationToken requires Resource "*".
+  - CKV_AWS_111
+  - CKV_AWS_356
+  - CKV_AWS_109
+  - CKV_AWS_108
+  # Inline IAM role policies are fine for this small bootstrap.
+  - CKV_AWS_40
+  - CKV_AWS_62
+  - CKV_AWS_63
