@@ -82,6 +82,8 @@ cd ..
 
 `ecr_push_role_arn` / `ecr_copy_role_arn` → app repo `branch-protection` variables.
 
+Bootstrap IAM uses **ECR name wildcards** (`sockshop-*`, `sockshop-*-env-1/2`). Adding or removing services in env stacks does **not** require a bootstrap re-apply.
+
 Bootstrap uses **local state** (gitignored).
 
 ### 2. Environment stacks (prefer GitHub Actions)

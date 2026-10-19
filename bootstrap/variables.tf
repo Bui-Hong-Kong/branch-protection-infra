@@ -29,23 +29,8 @@ variable "github_ref" {
   default     = "refs/heads/main"
 }
 
-variable "ecr_services" {
-  description = "Sock Shop service IDs used to build ECR repository names"
-  type        = list(string)
-  default = [
-    "carts",
-    "catalogue",
-    "orders",
-    "payment",
-    "shipping",
-    "user",
-    "frontend",
-    "test-terraform",
-  ]
-}
-
 variable "ecr_repository_name_prefix" {
-  description = "Prefix for ECR repository names (sockshop-<service>-env-N)"
+  description = "ECR name prefix for IAM wildcards (sockshop-* / sockshop-*-env-N)"
   type        = string
   default     = "sockshop"
 }

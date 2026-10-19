@@ -4,29 +4,11 @@ locals {
   image_push_subject = "repo:${var.image_repository_oidc}:ref:${var.image_push_ref}"
   image_copy_subject = "repo:${var.image_repository_oidc}:environment:${var.image_copy_environment}"
 
-  ecr_env1_names = [
-    for s in var.ecr_services : "${var.ecr_repository_name_prefix}-${s}-env-1"
-  ]
-  ecr_env2_names = [
-    for s in var.ecr_services : "${var.ecr_repository_name_prefix}-${s}-env-2"
-  ]
-  ecr_repository_names = concat(local.ecr_env1_names, local.ecr_env2_names)
-  ecr_repository_arns = [
-    for name in local.ecr_repository_names :
-    "arn:aws:ecr:${var.region}:${local.account_id}:repository/${name}"
-  ]
-  ecr_push_repository_arns = [
-    for name in local.ecr_env1_names :
-    "arn:aws:ecr:${var.region}:${local.account_id}:repository/${name}"
-  ]
-  ecr_copy_source_arns = [
-    for name in local.ecr_env1_names :
-    "arn:aws:ecr:${var.region}:${local.account_id}:repository/${name}"
-  ]
-  ecr_copy_destination_arns = [
-    for name in local.ecr_env2_names :
-    "arn:aws:ecr:${var.region}:${local.account_id}:repository/${name}"
-  ]
+  # Wildcard ARNs: adding/removing services in env stacks does not require bootstrap apply.
+  ecr_repository_arn_prefix = "arn:aws:ecr:${var.region}:${local.account_id}:repository/${var.ecr_repository_name_prefix}"
+  ecr_all_repository_arns   = ["${local.ecr_repository_arn_prefix}-*"]
+  ecr_env1_repository_arns  = ["${local.ecr_repository_arn_prefix}-*-env-1"]
+  ecr_env2_repository_arns  = ["${local.ecr_repository_arn_prefix}-*-env-2"]
 }
 
 resource "aws_iam_openid_connect_provider" "github" {
@@ -111,7 +93,7 @@ data "aws_iam_policy_document" "github_actions" {
       "ecr:PutImageScanningConfiguration",
       "ecr:PutImageTagMutability",
     ]
-    resources = local.ecr_repository_arns
+    resources = local.ecr_all_repository_arns
   }
 }
 
@@ -175,7 +157,7 @@ data "aws_iam_policy_document" "ecr_push" {
       "ecr:CompleteLayerUpload",
       "ecr:PutImage",
     ]
-    resources = local.ecr_push_repository_arns
+    resources = local.ecr_env1_repository_arns
   }
 }
 
@@ -235,7 +217,7 @@ data "aws_iam_policy_document" "ecr_copy" {
       "ecr:BatchGetImage",
       "ecr:GetDownloadUrlForLayer",
     ]
-    resources = local.ecr_copy_source_arns
+    resources = local.ecr_env1_repository_arns
   }
 
   statement {
@@ -250,7 +232,7 @@ data "aws_iam_policy_document" "ecr_copy" {
       "ecr:CompleteLayerUpload",
       "ecr:PutImage",
     ]
-    resources = local.ecr_copy_destination_arns
+    resources = local.ecr_env2_repository_arns
   }
 }
 
