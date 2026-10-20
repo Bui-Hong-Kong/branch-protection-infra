@@ -45,6 +45,8 @@ jobs:
             working_directory: .
           - stack: bootstrap
             working_directory: bootstrap
+          - stack: platform
+            working_directory: platform
     steps:
       - uses: actions/checkout@v4
 

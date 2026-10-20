@@ -19,8 +19,13 @@ output "account_id" {
 }
 
 output "github_actions_role_arn" {
-  description = "IAM role ARN for Terraform in branch-protection-infra. Set this as the GitHub variable AWS_ROLE_ARN on that repo."
+  description = "IAM role ARN for ECR env stacks. Set as GitHub variable AWS_ROLE_ARN."
   value       = aws_iam_role.github_actions.arn
+}
+
+output "github_actions_platform_role_arn" {
+  description = "IAM role ARN for platform/ (VPC+EKS). Set as GitHub variable AWS_ROLE_ARN_PLATFORM."
+  value       = aws_iam_role.github_actions_platform.arn
 }
 
 output "ecr_push_role_arn" {

@@ -1,5 +1,5 @@
 # Manual apply on main only (OIDC role trust is refs/heads/main).
-# Run: Actions → 2. Terraform apply → choose env-1 / env-2 / both.
+# Run: Actions → 2. Terraform apply → choose env-1 / env-2 / both / platform.
 
 name: 2. Terraform apply
 
@@ -7,13 +7,14 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: Environment stack to apply
+        description: Stack to apply
         type: choice
         required: true
         options:
           - env-1
           - env-2
           - both
+          - platform
         default: both
 
 permissions:
@@ -34,20 +35,27 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     outputs:
+      mode: ${{ steps.set.outputs.mode }}
       envs: ${{ steps.set.outputs.envs }}
     steps:
       - id: set
         run: |
           set -euo pipefail
-          if [ "${{ inputs.target }}" = "both" ]; then
+          if [ "${{ inputs.target }}" = "platform" ]; then
+            echo 'mode=platform' >> "$GITHUB_OUTPUT"
+            echo 'envs=[]' >> "$GITHUB_OUTPUT"
+          elif [ "${{ inputs.target }}" = "both" ]; then
+            echo 'mode=env' >> "$GITHUB_OUTPUT"
             echo 'envs=["env-1","env-2"]' >> "$GITHUB_OUTPUT"
           else
+            echo 'mode=env' >> "$GITHUB_OUTPUT"
             echo 'envs=["${{ inputs.target }}"]' >> "$GITHUB_OUTPUT"
           fi
 
-  apply:
+  apply_env:
     name: Apply (${{ matrix.env }})
     needs: prepare
+    if: needs.prepare.outputs.mode == 'env'
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 1
@@ -77,3 +85,35 @@ jobs:
           echo "### Applied \`${{ matrix.env }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Backend: \`${{ matrix.env }}.conf\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Vars: \`env/${{ matrix.env }}.tfvars\`" >> "$GITHUB_STEP_SUMMARY"
+
+  apply_platform:
+    name: Apply (platform)
+    needs: prepare
+    if: needs.prepare.outputs.mode == 'platform'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN_PLATFORM }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: terraform init
+        working-directory: platform
+        run: terraform init -reconfigure -input=false -backend-config=platform.conf
+
+      - name: terraform apply
+        working-directory: platform
+        run: terraform apply -auto-approve -input=false -var-file=platform.tfvars
+
+      - name: Summary
+        run: |
+          echo "### Applied \`platform\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Backend: \`platform/platform.conf\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Vars: \`platform/platform.tfvars\`" >> "$GITHUB_STEP_SUMMARY"
