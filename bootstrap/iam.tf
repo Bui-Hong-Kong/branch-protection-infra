@@ -1,14 +1,16 @@
 locals {
   # Repos use GitHub immutable OIDC subjects: repo:OWNER@OWNER_ID/REPO@REPO_ID:...
-  github_subject     = "repo:${var.github_repository_oidc}:ref:${var.github_ref}"
-  image_push_subject = "repo:${var.image_repository_oidc}:ref:${var.image_push_ref}"
-  image_copy_subject = "repo:${var.image_repository_oidc}:environment:${var.image_copy_environment}"
+  github_subject          = "repo:${var.github_repository_oidc}:ref:${var.github_ref}"
+  image_push_subject      = "repo:${var.image_repository_oidc}:ref:${var.image_push_ref}"
+  image_copy_subject      = "repo:${var.image_repository_oidc}:environment:${var.image_copy_environment}"
+  image_copy_prod_subject = "repo:${var.image_repository_oidc}:environment:${var.image_copy_prod_environment}"
 
   # Wildcard ARNs: adding/removing services in env stacks does not require bootstrap apply.
   ecr_repository_arn_prefix = "arn:aws:ecr:${var.region}:${local.account_id}:repository/${var.ecr_repository_name_prefix}"
   ecr_all_repository_arns   = ["${local.ecr_repository_arn_prefix}-*"]
   ecr_env1_repository_arns  = ["${local.ecr_repository_arn_prefix}-*-env-1"]
   ecr_env2_repository_arns  = ["${local.ecr_repository_arn_prefix}-*-env-2"]
+  ecr_env3_repository_arns  = ["${local.ecr_repository_arn_prefix}-*-env-3"]
 }
 
 resource "aws_iam_openid_connect_provider" "github" {
@@ -196,7 +198,11 @@ data "aws_iam_policy_document" "ecr_copy_trust" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = [local.image_copy_subject]
+      # env-2 (UAT promote) and prod (prod promote) share gha-copy
+      values = [
+        local.image_copy_subject,
+        local.image_copy_prod_subject,
+      ]
     }
   }
 }
@@ -233,6 +239,32 @@ data "aws_iam_policy_document" "ecr_copy" {
       "ecr:PutImage",
     ]
     resources = local.ecr_env2_repository_arns
+  }
+
+  statement {
+    sid    = "ReadEnv2"
+    effect = "Allow"
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:BatchGetImage",
+      "ecr:GetDownloadUrlForLayer",
+    ]
+    resources = local.ecr_env2_repository_arns
+  }
+
+  statement {
+    sid    = "WriteEnv3"
+    effect = "Allow"
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:BatchGetImage",
+      "ecr:GetDownloadUrlForLayer",
+      "ecr:InitiateLayerUpload",
+      "ecr:UploadLayerPart",
+      "ecr:CompleteLayerUpload",
+      "ecr:PutImage",
+    ]
+    resources = local.ecr_env3_repository_arns
   }
 }
 

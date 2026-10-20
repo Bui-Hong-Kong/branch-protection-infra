@@ -55,7 +55,13 @@ variable "image_push_ref" {
 }
 
 variable "image_copy_environment" {
-  description = "GitHub Environment allowed to copy images from env-1 to env-2"
+  description = "GitHub Environment allowed to copy images from env-1 to env-2 (UAT)"
   type        = string
   default     = "env-2"
+}
+
+variable "image_copy_prod_environment" {
+  description = "GitHub Environment allowed to copy images from env-2 to env-3 (prod)"
+  type        = string
+  default     = "prod"
 }
