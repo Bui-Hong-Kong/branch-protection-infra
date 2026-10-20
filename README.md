@@ -55,7 +55,7 @@ This repository holds **infrastructure-as-code only**. Application code lives in
 - Required checks: `Format (terraform)`, `Validate (root)`, `Validate (bootstrap)`, `Validate (platform)`, `Security (terraform)`
 - Branch must be up to date with `main`
 
-**Apply to AWS** is not automatic on merge. After merging to `main`, run **Actions → 2. Terraform apply** and choose `env-1`, `env-2`, `env-3`, `both` (1+2), `all` (1+2+3), or `platform`.
+**Apply to AWS** is not automatic on merge. After merging to `main`, run **Actions → 2. Terraform apply** and choose `env-1`, `env-2`, `env-3`, `all` (1+2+3), or `platform`.
 
 Set repo variables (not secrets) from `bootstrap/` outputs:
 
