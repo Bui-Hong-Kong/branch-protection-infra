@@ -34,7 +34,7 @@ output "ecr_push_role_arn" {
 }
 
 output "ecr_copy_role_arn" {
-  description = "IAM role ARN for copying images from env-1 to env-2. Set this as a GitHub variable on branch-protection."
+  description = "IAM role ARN for image promote (env-1→env-2 and env-2→env-3). Set as AWS_ROLE_ARN_COPY on branch-protection."
   value       = aws_iam_role.ecr_copy.arn
 }
 

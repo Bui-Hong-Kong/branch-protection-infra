@@ -1,5 +1,5 @@
 # Manual apply on main only (OIDC role trust is refs/heads/main).
-# Run: Actions → 2. Terraform apply → choose env-1 / env-2 / both / platform.
+# Run: Actions → 2. Terraform apply → env-1 / env-2 / env-3 / both / all / platform.
 
 name: 2. Terraform apply
 
@@ -13,7 +13,9 @@ on:
         options:
           - env-1
           - env-2
+          - env-3
           - both
+          - all
           - platform
         default: both
 
@@ -47,6 +49,9 @@ jobs:
           elif [ "${{ inputs.target }}" = "both" ]; then
             echo 'mode=env' >> "$GITHUB_OUTPUT"
             echo 'envs=["env-1","env-2"]' >> "$GITHUB_OUTPUT"
+          elif [ "${{ inputs.target }}" = "all" ]; then
+            echo 'mode=env' >> "$GITHUB_OUTPUT"
+            echo 'envs=["env-1","env-2","env-3"]' >> "$GITHUB_OUTPUT"
           else
             echo 'mode=env' >> "$GITHUB_OUTPUT"
             echo 'envs=["${{ inputs.target }}"]' >> "$GITHUB_OUTPUT"
