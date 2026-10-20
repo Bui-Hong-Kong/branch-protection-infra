@@ -1,5 +1,6 @@
 # Manual apply on main only (OIDC role trust is refs/heads/main).
-# Run: Actions → 2. Terraform apply → env-1 / env-2 / env-3 / all / platform.
+# Run: Actions → 2. Terraform apply → DEV / UAT / PROD / all / platform.
+# Stack keys remain env-1 / env-2 / env-3 (ECR names + state).
 
 name: 2. Terraform apply
 
@@ -11,12 +12,12 @@ on:
         type: choice
         required: true
         options:
-          - env-1
-          - env-2
-          - env-3
+          - DEV
+          - UAT
+          - PROD
           - all
           - platform
-        default: env-1
+        default: DEV
 
 permissions:
   contents: read
@@ -42,16 +43,32 @@ jobs:
       - id: set
         run: |
           set -euo pipefail
-          if [ "${{ inputs.target }}" = "platform" ]; then
-            echo 'mode=platform' >> "$GITHUB_OUTPUT"
-            echo 'envs=[]' >> "$GITHUB_OUTPUT"
-          elif [ "${{ inputs.target }}" = "all" ]; then
-            echo 'mode=env' >> "$GITHUB_OUTPUT"
-            echo 'envs=["env-1","env-2","env-3"]' >> "$GITHUB_OUTPUT"
-          else
-            echo 'mode=env' >> "$GITHUB_OUTPUT"
-            echo 'envs=["${{ inputs.target }}"]' >> "$GITHUB_OUTPUT"
-          fi
+          case "${{ inputs.target }}" in
+            platform)
+              echo 'mode=platform' >> "$GITHUB_OUTPUT"
+              echo 'envs=[]' >> "$GITHUB_OUTPUT"
+              ;;
+            all)
+              echo 'mode=env' >> "$GITHUB_OUTPUT"
+              echo 'envs=["env-1","env-2","env-3"]' >> "$GITHUB_OUTPUT"
+              ;;
+            DEV)
+              echo 'mode=env' >> "$GITHUB_OUTPUT"
+              echo 'envs=["env-1"]' >> "$GITHUB_OUTPUT"
+              ;;
+            UAT)
+              echo 'mode=env' >> "$GITHUB_OUTPUT"
+              echo 'envs=["env-2"]' >> "$GITHUB_OUTPUT"
+              ;;
+            PROD)
+              echo 'mode=env' >> "$GITHUB_OUTPUT"
+              echo 'envs=["env-3"]' >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Unknown target: ${{ inputs.target }}" >&2
+              exit 1
+              ;;
+          esac
 
   apply_env:
     name: Apply (${{ matrix.env }})
@@ -83,7 +100,13 @@ jobs:
 
       - name: Summary
         run: |
-          echo "### Applied \`${{ matrix.env }}\`" >> "$GITHUB_STEP_SUMMARY"
+          case "${{ matrix.env }}" in
+            env-1) label=DEV ;;
+            env-2) label=UAT ;;
+            env-3) label=PROD ;;
+            *) label="${{ matrix.env }}" ;;
+          esac
+          echo "### Applied \`${label}\` (\`${{ matrix.env }}\`)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Backend: \`${{ matrix.env }}.conf\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Vars: \`env/${{ matrix.env }}.tfvars\`" >> "$GITHUB_STEP_SUMMARY"
 
