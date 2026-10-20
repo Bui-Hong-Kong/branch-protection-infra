@@ -9,9 +9,10 @@ This repository holds **infrastructure-as-code only**. Application code lives in
 | Area | Notes |
 | --- | --- |
 | ECR | One AWS account; per Sock Shop service × env (`sockshop-<service>-env-1/2`) |
+| Platform | Shared **1 VPC + 1 EKS** (`platform/`) for all app namespaces |
 | State | Remote: S3 bucket and S3 lockfile (bucket created by `bootstrap/`) |
-| Image flow | Build/push each service to env-1; crane-copy same tag to env-2 — no compute yet |
-| Compute | ECS / other runtimes — add later |
+| Image flow | Build/push each service to env-1; crane-copy same tag to env-2 |
+| Workloads | Kubernetes manifests / Argo CD — add next (not in Terraform yet) |
 | CI | PR checks for Terraform; apply only via manual workflow on `main` |
 
 ## Layout
@@ -22,15 +23,17 @@ This repository holds **infrastructure-as-code only**. Application code lives in
 ├── .gitignore
 ├── .checkov.yaml
 ├── .github/
-│   ├── ruleset-main.json          # branch ruleset for main (import in GitHub UI / API)
+│   ├── ruleset-main.json
 │   └── workflows/
-│       ├── 01-terraform-check.yml # PR: fmt / validate / Checkov
-│       └── 02-terraform-apply.yml # main: workflow_dispatch apply (OIDC)
-├── bootstrap/                     # one-time: state backend + GitHub Actions IAM (local state)
-├── main.tf
-├── variables.tf
-├── outputs.tf
-├── versions.tf
+│       ├── 01-terraform-check.yml
+│       └── 02-terraform-apply.yml
+├── bootstrap/                     # state backend + GHA IAM (local state)
+│   ├── iam.tf                     # gha-terraform (ECR stacks)
+│   └── iam_platform.tf            # gha-platform (VPC/EKS)
+├── platform/                      # shared VPC + EKS + IRSA (iam.tf)
+│   ├── platform.conf
+│   └── platform.tfvars
+├── main.tf                        # ECR env stacks
 ├── env-1.conf
 ├── env-2.conf
 ├── env/
@@ -39,7 +42,9 @@ This repository holds **infrastructure-as-code only**. Application code lives in
 └── modules/services/ecr/
 ```
 
-One root serves both environments. Switch env by re-init with the other `.conf` and `-var-file`. `bootstrap/` stays a separate root.
+- **Root** = ECR per environment (`env-1` / `env-2`).
+- **`platform/`** = one shared compute network (apply once).
+- **`bootstrap/`** = separate root (local state).
 
 ## Branch protection and CI
 
@@ -47,14 +52,17 @@ One root serves both environments. Switch env by re-init with the other `.conf` 
 
 - No direct push / force-push / delete
 - Changes via pull request
-- Required checks: `Format (terraform)`, `Validate (root)`, `Validate (bootstrap)`, `Security (terraform)`
+- Required checks: `Format (terraform)`, `Validate (root)`, `Validate (bootstrap)`, `Validate (platform)`, `Security (terraform)`
 - Branch must be up to date with `main`
 
-**Apply to AWS** is not automatic on merge. After merging to `main`, run **Actions → 2. Terraform apply** (`workflow_dispatch`) and choose `env-1`, `env-2`, or `both`.
+**Apply to AWS** is not automatic on merge. After merging to `main`, run **Actions → 2. Terraform apply** and choose `env-1`, `env-2`, `both`, or `platform`.
 
-Set repo variable (not a secret) `AWS_ROLE_ARN` = `terraform output -raw github_actions_role_arn` from `bootstrap/` (OIDC role `branch-protection-gha-terraform`).
+Set repo variables (not secrets) from `bootstrap/` outputs:
 
-Enable the ruleset only after the check workflow has run once on a PR (so the status check names exist).
+- `AWS_ROLE_ARN` = `github_actions_role_arn` (ECR env stacks)
+- `AWS_ROLE_ARN_PLATFORM` = `github_actions_platform_role_arn` (VPC/EKS platform)
+
+After adding `Validate (platform)`, update the GitHub ruleset once so the new check is required (JSON in-repo is the source of truth to re-import).
 
 ## Prerequisites
 
@@ -62,11 +70,11 @@ Enable the ruleset only after the check workflow has run once on a PR (so the st
 - AWS CLI for local bootstrap only
 - Default region: `ap-southeast-1`
 
-Do not commit secrets, access keys, or `bootstrap/terraform.tfvars`. `env/*.tfvars` only hold resource names.
+Do not commit secrets, access keys, or `bootstrap/terraform.tfvars`. `env/*.tfvars` and `platform/platform.tfvars` only hold non-secret config.
 
 ## Apply order
 
-### 1. Bootstrap remote state (once, local)
+### 1. Bootstrap (once, local)
 
 ```bash
 cd bootstrap
@@ -76,28 +84,34 @@ terraform output
 cd ..
 ```
 
-`env-1.conf` and `env-2.conf` are filled for account `975305815837` with `use_lockfile`.
+Re-apply bootstrap when IAM changes. Platform permissions live in `bootstrap/iam_platform.tf` (role `gha-platform`); ECR stack permissions stay in `bootstrap/iam.tf` (`gha-terraform`).
 
-`github_actions_role_arn` → GitHub variable `AWS_ROLE_ARN` on **this** repo. Trust: immutable OIDC subject, `refs/heads/main` only.
+### 2. Platform (shared VPC + EKS)
 
-`ecr_push_role_arn` / `ecr_copy_role_arn` → app repo `branch-protection` variables.
+On `main`: **2. Terraform apply** → `platform`.
 
-Bootstrap IAM uses **ECR name wildcards** (`sockshop-*`, `sockshop-*-env-1/2`). Adding or removing services in env stacks does **not** require a bootstrap re-apply.
+Local:
 
-Bootstrap uses **local state** (gitignored).
+```bash
+cd platform
+terraform init -reconfigure -backend-config=platform.conf
+terraform apply -var-file=platform.tfvars
+aws eks update-kubeconfig --region ap-southeast-1 --name branch-protection-eks
+```
 
-### 2. Environment stacks (prefer GitHub Actions)
+Creates:
+
+- VPC (`10.40.0.0/16`), 2 AZ, 1 NAT
+- EKS `branch-protection-eks` (v1.31) + managed node group (`t3.medium` × 2)
+- IRSA role for **AWS Load Balancer Controller** (Helm/Argo install later)
+
+### 3. ECR environment stacks
 
 On `main`: **2. Terraform apply** → `both` (or one env).
-
-Local equivalent (optional):
 
 ```bash
 terraform init -reconfigure -backend-config=env-1.conf
 terraform apply -var-file=env/env-1.tfvars
-
-terraform init -reconfigure -backend-config=env-2.conf
-terraform apply -var-file=env/env-2.tfvars
 ```
 
 ## Security check
@@ -109,6 +123,7 @@ terraform apply -var-file=env/env-2.tfvars
 | Rotation / revocation | Rotate cloud credentials and CI tokens out-of-band |
 | Committed to git? | **No** — never commit real secrets or `*.tfstate` |
 | State bucket | Private, SSE, versioning, block public access (see `bootstrap/`) |
+| Platform IAM in GHA role | Broad lab permissions for EC2/EKS/IAM — tighten later if needed |
 
 ## ECR naming
 
@@ -117,8 +132,6 @@ sockshop-<service>-env-1   # push target
 sockshop-<service>-env-2   # promote target (crane copy)
 ```
 
-Seven services × two environments = fourteen repositories. Repositories use **IMMUTABLE** tags. Image tags follow the app workflow (`vX.Y.Z` stripped from `<service>-vX.Y.Z`); there is no `latest` tag.
-
 ## Status
 
-ECR-only stacks. PR Terraform gates + manual apply on `main` via OIDC.
+ECR stacks + platform Terraform (VPC/EKS/IRSA). Next: ALB controller + Argo CD + app/DB manifests per namespace.

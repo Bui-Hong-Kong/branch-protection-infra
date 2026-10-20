@@ -38,6 +38,7 @@
           { "context": "Format (terraform)" },
           { "context": "Validate (root)" },
           { "context": "Validate (bootstrap)" },
+          { "context": "Validate (platform)" },
           { "context": "Security (terraform)" }
         ]
       }

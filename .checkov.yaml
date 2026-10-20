@@ -21,3 +21,13 @@ skip-check:
   - CKV_AWS_108
   # AES256 on ECR is enough for this lab.
   - CKV_AWS_136
+  # Platform lab: public EKS API + single NAT + default module SG choices.
+  - CKV_AWS_38
+  - CKV_AWS_39
+  - CKV_AWS_58
+  - CKV_AWS_79
+  - CKV_AWS_158
+  - CKV2_AWS_11
+  - CKV2_AWS_12
+  - CKV2_AWS_19
+  - CKV_TF_1
