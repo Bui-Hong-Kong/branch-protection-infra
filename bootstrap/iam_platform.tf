@@ -25,6 +25,8 @@ data "aws_iam_policy_document" "github_actions_platform_trust" {
   }
 }
 
+# checkov:skip=CKV_AWS_110:Lab GHA platform role must create/PassRole EKS and IRSA roles
+# checkov:skip=CKV_AWS_107:Lab platform IAM includes broad IAM for EKS module lifecycle
 data "aws_iam_policy_document" "github_actions_platform" {
   statement {
     sid       = "StateList"

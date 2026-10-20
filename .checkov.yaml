@@ -31,3 +31,6 @@ skip-check:
   - CKV2_AWS_12
   - CKV2_AWS_19
   - CKV_TF_1
+  # gha-platform must PassRole/create EKS+IRSA roles for terraform-aws-modules/eks.
+  - CKV_AWS_110
+  - CKV_AWS_107

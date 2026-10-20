@@ -22,6 +22,12 @@ variable "vpc_cidr" {
   default     = "10.40.0.0/16"
 }
 
+variable "azs" {
+  description = "Pinned AZs for the platform VPC (avoid silent expansion when AWS adds zones)"
+  type        = list(string)
+  default     = ["ap-southeast-1a", "ap-southeast-1b"]
+}
+
 variable "cluster_version" {
   description = "Kubernetes version for the EKS cluster"
   type        = string
