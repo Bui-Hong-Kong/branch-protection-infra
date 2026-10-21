@@ -87,3 +87,45 @@ variable "argo_image_updater_chart_version" {
   type        = string
   default     = "0.12.3"
 }
+
+variable "catalogue_db_instance_class" {
+  description = "RDS instance class for Sock Shop catalogue (MySQL)"
+  type        = string
+  default     = "db.t4g.micro"
+}
+
+variable "catalogue_db_engine_version" {
+  description = "MySQL engine version for catalogue RDS"
+  type        = string
+  default     = "8.0"
+}
+
+variable "catalogue_db_allocated_storage" {
+  description = "Allocated storage (GiB) for catalogue RDS"
+  type        = number
+  default     = 20
+}
+
+variable "catalogue_db_max_allocated_storage" {
+  description = "Autoscaling storage ceiling (GiB); 0 disables"
+  type        = number
+  default     = 50
+}
+
+variable "catalogue_db_name" {
+  description = "Initial database name (Sock Shop socksdb)"
+  type        = string
+  default     = "socksdb"
+}
+
+variable "catalogue_db_username" {
+  description = "Master username for catalogue RDS"
+  type        = string
+  default     = "catalogue_user"
+}
+
+variable "catalogue_db_backup_retention_period" {
+  description = "Automated backup retention days (0 disables; lab may use 1)"
+  type        = number
+  default     = 1
+}
