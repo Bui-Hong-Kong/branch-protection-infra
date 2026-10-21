@@ -63,3 +63,21 @@ variable "cluster_endpoint_public_access" {
   type        = bool
   default     = true
 }
+
+variable "app_namespaces" {
+  description = "Sock Shop environment namespaces on the shared EKS cluster"
+  type        = list(string)
+  default     = ["sockshop-dev", "sockshop-uat", "sockshop-prod"]
+}
+
+variable "aws_load_balancer_controller_chart_version" {
+  description = "Helm chart version for aws-load-balancer-controller"
+  type        = string
+  default     = "1.11.0"
+}
+
+variable "argo_cd_chart_version" {
+  description = "Helm chart version for argo-cd (argo-helm)"
+  type        = string
+  default     = "7.8.13"
+}
