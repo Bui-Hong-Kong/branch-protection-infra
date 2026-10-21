@@ -63,3 +63,13 @@ output "argocd_port_forward_hint" {
   description = "Local UI access (ClusterIP service)"
   value       = "kubectl -n argocd port-forward svc/argocd-server 8080:443"
 }
+
+output "argocd_image_updater_role_arn" {
+  description = "IRSA role ARN for argocd-image-updater (ECR read)"
+  value       = module.argocd_image_updater_irsa.iam_role_arn
+}
+
+output "argocd_image_updater_git_secret_hint" {
+  description = "Optional Git write-back: create PAT secret in argocd (not managed by Terraform)"
+  value       = "kubectl -n argocd create secret generic git-creds --from-literal=username=<GITHUB_USER> --from-literal=password=<PAT>  # scopes: repo; do not commit the PAT"
+}

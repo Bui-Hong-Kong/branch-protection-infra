@@ -74,3 +74,29 @@ resource "helm_release" "argo_cd" {
     helm_release.aws_load_balancer_controller,
   ]
 }
+
+resource "helm_release" "argocd_image_updater" {
+  name       = "argocd-image-updater"
+  repository = "https://argoproj.github.io/argo-helm"
+  chart      = "argocd-image-updater"
+  version    = var.argo_image_updater_chart_version
+  namespace  = "argocd"
+
+  atomic          = true
+  cleanup_on_fail = true
+  wait            = true
+  timeout         = 600
+
+  values = [
+    templatefile("${path.module}/argocd-image-updater-values.yaml.tftpl", {
+      role_arn   = module.argocd_image_updater_irsa.iam_role_arn
+      region     = var.region
+      account_id = data.aws_caller_identity.current.account_id
+    })
+  ]
+
+  depends_on = [
+    helm_release.argo_cd,
+    module.argocd_image_updater_irsa,
+  ]
+}

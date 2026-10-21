@@ -81,3 +81,9 @@ variable "argo_cd_chart_version" {
   type        = string
   default     = "7.8.13"
 }
+
+variable "argo_image_updater_chart_version" {
+  description = "Helm chart version for argocd-image-updater (argo-helm)"
+  type        = string
+  default     = "0.12.3"
+}

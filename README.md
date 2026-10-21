@@ -112,6 +112,7 @@ Creates:
 - EKS `branch-protection-eks` (v1.31) + managed node group (`t3.medium` × 2)
 - IRSA + Helm: **AWS Load Balancer Controller** (`kube-system`)
 - Helm: **Argo CD** (`argocd`, ClusterIP — use `kubectl port-forward`)
+- Helm: **Argo CD Image Updater** (`argocd`, IRSA → ECR read)
 - Namespaces: `sockshop-dev`, `sockshop-uat`, `sockshop-prod`
 
 Argo CD UI (after kubeconfig):
@@ -121,6 +122,8 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.pas
 kubectl -n argocd port-forward svc/argocd-server 8080:443
 # open https://localhost:8080  user: admin
 ```
+
+Image Updater watches ECR and can write new tags back to Git. **IAC installs the controller only**; enable per Application with annotations in the app repo. For Git write-back, create a PAT secret out-of-band (see `terraform output argocd_image_updater_git_secret_hint`) — do not commit the PAT.
 
 Application manifests and `Application` CRs belong in [`branch-protection`](https://github.com/Bui-Hong-Kong/branch-protection) (or a GitOps repo), not here.
 
@@ -137,7 +140,7 @@ terraform apply -var-file=env/env-3.tfvars
 
 | Question | Answer |
 | --- | --- |
-| Where are secrets stored? | Not in this repo — OIDC role from `bootstrap/` for CI |
+| Where are secrets stored? | Not in this repo — OIDC/`bootstrap` for CI; optional Argo Git PAT created in-cluster only |
 | Who can access? | Org members with repo access + least-privilege cloud roles |
 | Rotation / revocation | Rotate cloud credentials and CI tokens out-of-band |
 | Committed to git? | **No** — never commit real secrets or `*.tfstate` |
@@ -154,4 +157,4 @@ sockshop-<service>-env-3   # prod — copy from env-2
 
 ## Status
 
-ECR env-1/2/3 + platform (VPC/EKS/IRSA/ALB controller/Argo CD/namespaces). Next: app manifests + Argo Applications in the app repo.
+ECR env-1/2/3 + platform (VPC/EKS/IRSA/ALB/Argo CD/Image Updater/namespaces). Next: Application annotations for Image Updater (+ optional Git PAT secret).
