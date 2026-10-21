@@ -1,0 +1,17 @@
+# Lab Argo CD UI: hide noisy child kinds so Application trees stay readable.
+# Deployments/Services/Ingress remain; ReplicaSet/Endpoints are derived live noise.
+configs:
+  cm:
+    resource.exclusions: |
+      - apiGroups:
+          - ""
+        kinds:
+          - Endpoints
+      - apiGroups:
+          - discovery.k8s.io
+        kinds:
+          - EndpointSlice
+      - apiGroups:
+          - apps
+        kinds:
+          - ReplicaSet

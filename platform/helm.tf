@@ -58,6 +58,8 @@ resource "helm_release" "argo_cd" {
   wait            = true
   timeout         = 900
 
+  values = [file("${path.module}/argocd-values.yaml")]
+
   # Lab defaults: single replica, ClusterIP (kubectl port-forward).
   set {
     name  = "server.service.type"
