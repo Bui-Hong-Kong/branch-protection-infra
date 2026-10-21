@@ -93,6 +93,17 @@ data "aws_iam_policy_document" "github_actions_platform" {
       "iam:PutRolePolicy",
       "iam:GetRolePolicy",
       "iam:DeleteRolePolicy",
+      "iam:CreatePolicy",
+      "iam:DeletePolicy",
+      "iam:GetPolicy",
+      "iam:GetPolicyVersion",
+      "iam:ListPolicyVersions",
+      "iam:ListEntitiesForPolicy",
+      "iam:CreatePolicyVersion",
+      "iam:DeletePolicyVersion",
+      "iam:SetDefaultPolicyVersion",
+      "iam:TagPolicy",
+      "iam:UntagPolicy",
       "iam:CreateOpenIDConnectProvider",
       "iam:DeleteOpenIDConnectProvider",
       "iam:GetOpenIDConnectProvider",
@@ -133,11 +144,27 @@ data "aws_iam_policy_document" "github_actions_platform" {
     resources = ["*"]
   }
 
+  # EKS module creates a CMK (CreateKey + TagResource + key policy/rotation).
   statement {
     sid    = "PlatformKms"
     effect = "Allow"
     actions = [
+      "kms:CreateKey",
       "kms:DescribeKey",
+      "kms:GetKeyPolicy",
+      "kms:PutKeyPolicy",
+      "kms:ScheduleKeyDeletion",
+      "kms:CancelKeyDeletion",
+      "kms:EnableKeyRotation",
+      "kms:DisableKeyRotation",
+      "kms:GetKeyRotationStatus",
+      "kms:ListResourceTags",
+      "kms:TagResource",
+      "kms:UntagResource",
+      "kms:CreateAlias",
+      "kms:DeleteAlias",
+      "kms:UpdateAlias",
+      "kms:ListAliases",
       "kms:CreateGrant",
       "kms:ListGrants",
       "kms:RevokeGrant",
