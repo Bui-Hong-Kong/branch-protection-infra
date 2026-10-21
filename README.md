@@ -33,8 +33,7 @@ This repository holds **infrastructure-as-code only**. Application code lives in
 ├── platform/                      # VPC + EKS + IRSA + Helm (ALB, Argo CD) + namespaces
 │   ├── platform.conf
 │   ├── platform.tfvars
-│   ├── helm_alb.tf
-│   ├── helm_argocd.tf
+│   ├── helm.tf
 │   └── namespaces.tf
 ├── main.tf                        # ECR env stacks
 ├── env-1.conf / env-2.conf / env-3.conf
