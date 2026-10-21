@@ -1,4 +1,4 @@
-# Catalogue MySQL (Sock Shop) — single-AZ lab. Password lives in Secrets Manager (not git).
+# Catalogue MySQL (Sock Shop) - single-AZ lab. Password lives in Secrets Manager (not git).
 
 resource "random_password" "catalogue_db" {
   length  = 24
@@ -17,7 +17,7 @@ resource "aws_db_subnet_group" "catalogue" {
 
 resource "aws_security_group" "catalogue_db" {
   name_prefix = "${var.name_prefix}-catalogue-db-"
-  description = "RDS MySQL catalogue — allow 3306 from EKS nodes"
+  description = "RDS MySQL catalogue - allow 3306 from EKS nodes"
   vpc_id      = module.vpc.vpc_id
 
   ingress {
