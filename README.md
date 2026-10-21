@@ -12,7 +12,7 @@ This repository holds **infrastructure-as-code only**. Application code lives in
 | Platform | Shared **1 VPC + 1 EKS** (`platform/`) for all app namespaces |
 | State | Remote: S3 bucket and S3 lockfile (bucket created by `bootstrap/`) |
 | Image flow | Push → env-1 (dev); copy → env-2 (UAT); copy → env-3 (prod) via shared `gha-copy` |
-| Workloads | Kubernetes manifests / Argo CD — add next (not in Terraform yet) |
+| Workloads | Platform installs ALB controller + Argo CD + app namespaces; **app manifests / Argo Applications** live in the app repo |
 | CI | PR checks for Terraform; apply only via manual workflow on `main` |
 
 ## Layout
@@ -30,9 +30,11 @@ This repository holds **infrastructure-as-code only**. Application code lives in
 ├── bootstrap/                     # state backend + GHA IAM (local state)
 │   ├── iam.tf                     # gha-terraform + gha-push/copy (ECR + promote)
 │   └── iam_platform.tf            # gha-platform (VPC/EKS)
-├── platform/                      # shared VPC + EKS + IRSA (iam.tf)
+├── platform/                      # VPC + EKS + IRSA + Helm (ALB, Argo CD) + namespaces
 │   ├── platform.conf
-│   └── platform.tfvars
+│   ├── platform.tfvars
+│   ├── helm.tf
+│   └── namespaces.tf
 ├── main.tf                        # ECR env stacks
 ├── env-1.conf / env-2.conf / env-3.conf
 ├── env/
@@ -108,7 +110,19 @@ Creates:
 
 - VPC (`10.40.0.0/16`), 2 AZ, 1 NAT
 - EKS `branch-protection-eks` (v1.31) + managed node group (`t3.medium` × 2)
-- IRSA role for **AWS Load Balancer Controller** (Helm/Argo install later)
+- IRSA + Helm: **AWS Load Balancer Controller** (`kube-system`)
+- Helm: **Argo CD** (`argocd`, ClusterIP — use `kubectl port-forward`)
+- Namespaces: `sockshop-dev`, `sockshop-uat`, `sockshop-prod`
+
+Argo CD UI (after kubeconfig):
+
+```bash
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d
+kubectl -n argocd port-forward svc/argocd-server 8080:443
+# open https://localhost:8080  user: admin
+```
+
+Application manifests and `Application` CRs belong in [`branch-protection`](https://github.com/Bui-Hong-Kong/branch-protection) (or a GitOps repo), not here.
 
 ### 3. ECR environment stacks
 
@@ -140,4 +154,4 @@ sockshop-<service>-env-3   # prod — copy from env-2
 
 ## Status
 
-ECR env-1/2/3 + platform Terraform (VPC/EKS/IRSA). Next: ALB controller + Argo CD + app/DB manifests per namespace.
+ECR env-1/2/3 + platform (VPC/EKS/IRSA/ALB controller/Argo CD/namespaces). Next: app manifests + Argo Applications in the app repo.

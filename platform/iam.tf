@@ -1,5 +1,5 @@
 # Workload IAM for the shared EKS platform (IRSA).
-# Install the controller later (Helm/Argo) using aws_load_balancer_controller_role_arn.
+# Helm release aws-load-balancer-controller annotates SA with this role ARN.
 
 module "aws_load_balancer_controller_irsa" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"

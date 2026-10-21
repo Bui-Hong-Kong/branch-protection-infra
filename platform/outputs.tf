@@ -43,3 +43,23 @@ output "aws_load_balancer_controller_role_arn" {
   description = "IRSA role ARN for aws-load-balancer-controller (kube-system)"
   value       = module.aws_load_balancer_controller_irsa.iam_role_arn
 }
+
+output "app_namespaces" {
+  description = "Sock Shop namespaces created on the cluster"
+  value       = sort(keys(kubernetes_namespace.sockshop))
+}
+
+output "argocd_namespace" {
+  description = "Namespace where Argo CD is installed"
+  value       = helm_release.argo_cd.namespace
+}
+
+output "argocd_admin_password_hint" {
+  description = "How to read the initial Argo CD admin password"
+  value       = "kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d"
+}
+
+output "argocd_port_forward_hint" {
+  description = "Local UI access (ClusterIP service)"
+  value       = "kubectl -n argocd port-forward svc/argocd-server 8080:443"
+}
