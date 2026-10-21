@@ -28,12 +28,7 @@ resource "aws_security_group" "catalogue_db" {
     security_groups = [module.eks.node_security_group_id]
   }
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  # No open egress: SG is stateful; return traffic for allowed ingress is permitted.
 
   tags = {
     Name      = "${var.name_prefix}-catalogue-db"
@@ -87,6 +82,7 @@ resource "aws_db_instance" "catalogue" {
   depends_on = [module.eks]
 }
 
+# checkov:skip=CKV2_AWS_57:Lab rotates catalogue DB secret manually / out-of-band
 resource "aws_secretsmanager_secret" "catalogue_db" {
   name                    = "${var.name_prefix}/sockshop/catalogue-db"
   description             = "Sock Shop catalogue MySQL credentials (RDS)"

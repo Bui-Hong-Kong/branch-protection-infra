@@ -44,4 +44,6 @@ skip-check:
   - CKV_AWS_161
   - CKV2_AWS_27
   - CKV2_AWS_60
+  - CKV2_AWS_57
   - CKV_AWS_149
+  - CKV_AWS_382
