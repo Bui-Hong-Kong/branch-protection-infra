@@ -9,7 +9,7 @@ module "vpc" {
   private_subnets = [for i, az in var.azs : cidrsubnet(var.vpc_cidr, 4, i)]
   public_subnets  = [for i, az in var.azs : cidrsubnet(var.vpc_cidr, 4, i + 8)]
 
-  enable_nat_gateway   = true
+  enable_nat_gateway   = var.enable_nat_gateway
   single_nat_gateway   = true
   enable_dns_hostnames = true
   enable_dns_support   = true

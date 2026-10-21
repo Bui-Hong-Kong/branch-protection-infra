@@ -34,6 +34,12 @@ variable "cluster_version" {
   default     = "1.31"
 }
 
+variable "enable_nat_gateway" {
+  description = "Provision a NAT Gateway (set false overnight to save cost; private pulls need it on)"
+  type        = bool
+  default     = true
+}
+
 variable "node_instance_types" {
   description = "Instance types for the managed node group"
   type        = list(string)
@@ -41,7 +47,7 @@ variable "node_instance_types" {
 }
 
 variable "node_desired_size" {
-  description = "Desired node count"
+  description = "Desired node count (0 = scale workers to zero; EKS control plane still bills)"
   type        = number
   default     = 2
 }
