@@ -9,7 +9,7 @@ This repository holds **infrastructure-as-code only**. Application code lives in
 | Area | Notes |
 | --- | --- |
 | ECR | One AWS account; per Sock Shop service × env (`sockshop-<service>-env-1/2/3`) |
-| Platform | Shared **1 VPC + 1 EKS** (`platform/`) for all app namespaces |
+| Platform | Shared **1 VPC + 1 EKS** + catalogue **RDS MySQL (single-AZ)** + Secrets Manager |
 | State | Remote: S3 bucket and S3 lockfile (bucket created by `bootstrap/`) |
 | Image flow | Push → env-1 (dev); copy → env-2 (UAT); copy → env-3 (prod) via shared `gha-copy` |
 | Workloads | Platform installs ALB controller + Argo CD + app namespaces; **app manifests / Argo Applications** live in the app repo |
@@ -30,10 +30,11 @@ This repository holds **infrastructure-as-code only**. Application code lives in
 ├── bootstrap/                     # state backend + GHA IAM (local state)
 │   ├── iam.tf                     # gha-terraform + gha-push/copy (ECR + promote)
 │   └── iam_platform.tf            # gha-platform (VPC/EKS)
-├── platform/                      # VPC + EKS + IRSA + Helm (ALB, Argo CD) + namespaces
+├── platform/                      # VPC + EKS + IRSA + Helm + RDS catalogue + namespaces
 │   ├── platform.conf
 │   ├── platform.tfvars
 │   ├── helm.tf
+│   ├── rds.tf
 │   └── namespaces.tf
 ├── main.tf                        # ECR env stacks
 ├── env-1.conf / env-2.conf / env-3.conf
@@ -114,6 +115,9 @@ Creates:
 - Helm: **Argo CD** (`argocd`, ClusterIP — use `kubectl port-forward`)
 - Helm: **Argo CD Image Updater** (`argocd`, IRSA → ECR read)
 - Namespaces: `sockshop-dev`, `sockshop-uat`, `sockshop-prod`
+- **RDS MySQL** catalogue (`socksdb`, single-AZ `db.t4g.micro`) + **Secrets Manager** secret (`…/sockshop/catalogue-db`)
+
+RDS is empty after create — load Sock Shop catalogue schema/seed separately, then point the app DSN at the secret (External Secrets / IRSA next). Mongo carts/orders/user stay in-cluster for now.
 
 Argo CD UI (after kubeconfig):
 
@@ -140,10 +144,10 @@ terraform apply -var-file=env/env-3.tfvars
 
 | Question | Answer |
 | --- | --- |
-| Where are secrets stored? | Not in this repo — OIDC/`bootstrap` for CI; optional Argo Git PAT created in-cluster only |
-| Who can access? | Org members with repo access + least-privilege cloud roles |
-| Rotation / revocation | Rotate cloud credentials and CI tokens out-of-band |
-| Committed to git? | **No** — never commit real secrets or `*.tfstate` |
+| Where are secrets stored? | Catalogue DB password in **Secrets Manager**; OIDC/`bootstrap` for CI; optional Argo Git PAT in-cluster only |
+| Who can access? | Org members + `gha-platform` for apply; app should use IRSA/External Secrets (least privilege) later |
+| Rotation / revocation | Rotate Secrets Manager / RDS password out-of-band; revoke IAM as needed |
+| Committed to git? | **No** — never commit DB passwords, PAT, or `*.tfstate` |
 | State bucket | Private, SSE, versioning, block public access (see `bootstrap/`) |
 | Platform IAM in GHA role | Broad lab permissions for EC2/EKS/IAM — tighten later if needed |
 
@@ -157,4 +161,4 @@ sockshop-<service>-env-3   # prod — copy from env-2
 
 ## Status
 
-ECR env-1/2/3 + platform (VPC/EKS/IRSA/ALB/Argo CD/Image Updater/namespaces). Next: Application annotations for Image Updater (+ optional Git PAT secret).
+ECR env-1/2/3 + platform (VPC/EKS/ALB/Argo/Image Updater/RDS catalogue). Next: seed catalogue schema; wire app DSN via External Secrets; Image Updater annotations.

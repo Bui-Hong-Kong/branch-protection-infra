@@ -73,3 +73,28 @@ output "argocd_image_updater_git_secret_hint" {
   description = "Optional Git write-back: create PAT secret in argocd (not managed by Terraform)"
   value       = "kubectl -n argocd create secret generic git-creds --from-literal=username=<GITHUB_USER> --from-literal=password=<PAT>  # scopes: repo; do not commit the PAT"
 }
+
+output "catalogue_db_endpoint" {
+  description = "RDS MySQL hostname for Sock Shop catalogue"
+  value       = aws_db_instance.catalogue.address
+}
+
+output "catalogue_db_port" {
+  description = "RDS MySQL port"
+  value       = aws_db_instance.catalogue.port
+}
+
+output "catalogue_db_name" {
+  description = "Catalogue database name"
+  value       = aws_db_instance.catalogue.db_name
+}
+
+output "catalogue_db_secret_arn" {
+  description = "Secrets Manager ARN (username/password/dsn). Do not commit secret values."
+  value       = aws_secretsmanager_secret.catalogue_db.arn
+}
+
+output "catalogue_db_secret_name" {
+  description = "Secrets Manager name for catalogue DB"
+  value       = aws_secretsmanager_secret.catalogue_db.name
+}

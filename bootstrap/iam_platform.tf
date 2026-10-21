@@ -144,6 +144,34 @@ data "aws_iam_policy_document" "github_actions_platform" {
     resources = ["*"]
   }
 
+  statement {
+    sid    = "PlatformRds"
+    effect = "Allow"
+    actions = [
+      "rds:*",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "PlatformSecretsManager"
+    effect = "Allow"
+    actions = [
+      "secretsmanager:CreateSecret",
+      "secretsmanager:DeleteSecret",
+      "secretsmanager:DescribeSecret",
+      "secretsmanager:GetSecretValue",
+      "secretsmanager:PutSecretValue",
+      "secretsmanager:UpdateSecret",
+      "secretsmanager:TagResource",
+      "secretsmanager:UntagResource",
+      "secretsmanager:GetResourcePolicy",
+      "secretsmanager:PutResourcePolicy",
+      "secretsmanager:DeleteResourcePolicy",
+    ]
+    resources = ["*"]
+  }
+
   # EKS module creates a CMK (CreateKey + TagResource + key policy/rotation).
   statement {
     sid    = "PlatformKms"

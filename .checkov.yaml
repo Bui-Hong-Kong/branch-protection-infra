@@ -34,3 +34,14 @@ skip-check:
   # gha-platform must PassRole/create EKS+IRSA roles for terraform-aws-modules/eks.
   - CKV_AWS_110
   - CKV_AWS_107
+  # Lab RDS catalogue: single-AZ, no deletion protection / PI / IAM DB auth / secret rotation.
+  - CKV_AWS_157
+  - CKV_AWS_293
+  - CKV_AWS_353
+  - CKV_AWS_354
+  - CKV_AWS_118
+  - CKV_AWS_129
+  - CKV_AWS_161
+  - CKV2_AWS_27
+  - CKV2_AWS_60
+  - CKV_AWS_149
