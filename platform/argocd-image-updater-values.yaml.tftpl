@@ -1,0 +1,75 @@
+# Rendered by Terraform for helm_release.argocd_image_updater.
+
+replicaCount: 1
+
+serviceAccount:
+  create: true
+  name: argocd-image-updater
+  annotations:
+    eks.amazonaws.com/role-arn: ${role_arn}
+
+extraEnv:
+  - name: AWS_REGION
+    value: ${region}
+  - name: AWS_DEFAULT_REGION
+    value: ${region}
+
+# aws CLI for ECR auth script (image-updater image has no aws binary).
+initContainers:
+  - name: copy-aws-cli
+    image: public.ecr.aws/aws-cli/aws-cli:2.22.35
+    command:
+      - /bin/sh
+      - -c
+      - cp -a /usr/local/aws-cli/v2/current/. /aws-tools/
+    volumeMounts:
+      - name: aws-tools
+        mountPath: /aws-tools
+
+volumeMounts:
+  - name: aws-tools
+    mountPath: /aws-tools
+
+volumes:
+  - name: aws-tools
+    emptyDir: {}
+
+authScripts:
+  enabled: true
+  scripts:
+    ecr-login.sh: |
+      #!/bin/sh
+      set -eu
+      export PATH="/aws-tools/bin:$PATH"
+      # Prints username:password (AWS:<token>) for the registry client.
+      aws ecr get-authorization-token \
+        --region "$AWS_REGION" \
+        --output text \
+        --query 'authorizationData[].authorizationToken' | base64 -d
+      echo
+
+config:
+  log.level: info
+  git.user: argocd-image-updater
+  git.email: argocd-image-updater@users.noreply.github.com
+  registries:
+    - name: ecr
+      api_url: https://${account_id}.dkr.ecr.${region}.amazonaws.com
+      prefix: ${account_id}.dkr.ecr.${region}.amazonaws.com
+      ping: true
+      insecure: false
+      credentials: ext:/scripts/ecr-login.sh
+      credsexpire: 10h
+
+rbac:
+  enabled: true
+
+createClusterRoles: true
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
