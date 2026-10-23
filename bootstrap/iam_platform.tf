@@ -163,6 +163,9 @@ data "aws_iam_policy_document" "github_actions_platform" {
       "secretsmanager:GetSecretValue",
       "secretsmanager:PutSecretValue",
       "secretsmanager:UpdateSecret",
+      # Needed when aws_secretsmanager_secret_version is replaced (stage move/remove)
+      "secretsmanager:UpdateSecretVersionStage",
+      "secretsmanager:ListSecretVersionIds",
       "secretsmanager:TagResource",
       "secretsmanager:UntagResource",
       "secretsmanager:GetResourcePolicy",
