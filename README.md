@@ -115,9 +115,11 @@ Creates:
 - Helm: **Argo CD** (`argocd`, ClusterIP — use `kubectl port-forward`)
 - Helm: **Argo CD Image Updater** (`argocd`, IRSA → ECR read)
 - Namespaces: `sockshop-dev`, `sockshop-uat`, `sockshop-prod`
-- **RDS MySQL** catalogue (`socksdb`, single-AZ `db.t4g.micro`) + **Secrets Manager** secret (`…/sockshop/catalogue-db`)
+- **RDS MySQL** catalogue (single-AZ `db.t4g.micro`) + **Secrets Manager** (`…/sockshop/catalogue-db`)
+  - One instance; logical DBs per namespace: `socksdb_dev` / `socksdb_uat` / `socksdb_prod` (DSN keys `dsn_dev` / `dsn_uat` / `dsn_prod`)
+  - Initial `socksdb` from `aws_db_instance.db_name` is leftover — apps use the per-env DBs
 
-RDS is empty after create — load Sock Shop catalogue schema/seed separately, then point the app DSN at the secret (External Secrets / IRSA next). Mongo carts/orders/user stay in-cluster for now.
+Create the three DBs + seed schema from a Job in-cluster (RDS is private). Wire each ns Secret `catalogue-db` with the matching `dsn_*`. Mongo carts/orders/user stay in-cluster for now.
 
 Argo CD UI (after kubeconfig):
 

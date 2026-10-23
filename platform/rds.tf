@@ -94,16 +94,34 @@ resource "aws_secretsmanager_secret" "catalogue_db" {
   }
 }
 
+# One RDS instance; logical DBs per Sock Shop namespace (lab cost control).
+# RDS db_name (socksdb) is only the initial provisioned DB — app envs use socksdb_*.
+locals {
+  catalogue_db_by_env = {
+    dev  = "socksdb_dev"
+    uat  = "socksdb_uat"
+    prod = "socksdb_prod"
+  }
+  catalogue_dsn_prefix = "${aws_db_instance.catalogue.username}:${random_password.catalogue_db.result}@tcp(${aws_db_instance.catalogue.address}:${aws_db_instance.catalogue.port})"
+}
+
 resource "aws_secretsmanager_secret_version" "catalogue_db" {
   secret_id = aws_secretsmanager_secret.catalogue_db.id
   secret_string = jsonencode({
     engine   = "mysql"
     host     = aws_db_instance.catalogue.address
     port     = aws_db_instance.catalogue.port
-    dbname   = aws_db_instance.catalogue.db_name
     username = aws_db_instance.catalogue.username
     password = random_password.catalogue_db.result
-    # Go catalogue DSN flag shape
-    dsn = "${aws_db_instance.catalogue.username}:${random_password.catalogue_db.result}@tcp(${aws_db_instance.catalogue.address}:${aws_db_instance.catalogue.port})/${aws_db_instance.catalogue.db_name}"
+    # Legacy initial DB from aws_db_instance.db_name (optional leftover)
+    dbname = aws_db_instance.catalogue.db_name
+    dsn    = "${local.catalogue_dsn_prefix}/${aws_db_instance.catalogue.db_name}"
+    # Per-namespace DBs (sockshop-dev / sockshop-uat / sockshop-prod)
+    dbname_dev  = local.catalogue_db_by_env.dev
+    dbname_uat  = local.catalogue_db_by_env.uat
+    dbname_prod = local.catalogue_db_by_env.prod
+    dsn_dev     = "${local.catalogue_dsn_prefix}/${local.catalogue_db_by_env.dev}"
+    dsn_uat     = "${local.catalogue_dsn_prefix}/${local.catalogue_db_by_env.uat}"
+    dsn_prod    = "${local.catalogue_dsn_prefix}/${local.catalogue_db_by_env.prod}"
   })
 }
