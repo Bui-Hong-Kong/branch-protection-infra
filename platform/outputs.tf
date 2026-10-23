@@ -85,8 +85,13 @@ output "catalogue_db_port" {
 }
 
 output "catalogue_db_name" {
-  description = "Catalogue database name"
+  description = "Initial RDS database name (legacy socksdb)"
   value       = aws_db_instance.catalogue.db_name
+}
+
+output "catalogue_db_names_by_env" {
+  description = "Logical MySQL database per Sock Shop namespace (dev/uat/prod)"
+  value       = local.catalogue_db_by_env
 }
 
 output "catalogue_db_secret_arn" {
