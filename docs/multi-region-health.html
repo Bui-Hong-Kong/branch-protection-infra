@@ -1,0 +1,1508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Multi-region health &amp; failover</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c1210;
+      --bg-elev: #141c18;
+      --ink: #e8f0ea;
+      --muted: #8fa396;
+      --line: #2a3a32;
+      --accent: #3dd68c;
+      --accent-dim: #1a4d36;
+      --warn: #e8b84a;
+      --danger: #e86a5a;
+      --region-a: #4db8ff;
+      --region-b: #c084fc;
+      --dns: #f0d78c;
+      --font-display: "Figtree", system-ui, sans-serif;
+      --font-body: "Figtree", system-ui, sans-serif;
+      --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.55;
+      min-height: 100vh;
+      background-image:
+        radial-gradient(ellipse 80% 50% at 10% -10%, #1a3d2e 0%, transparent 55%),
+        radial-gradient(ellipse 60% 40% at 90% 0%, #1a2840 0%, transparent 50%),
+        linear-gradient(180deg, var(--bg) 0%, #0a0f0d 100%);
+    }
+
+    .noise {
+      pointer-events: none;
+      position: fixed;
+      inset: 0;
+      opacity: 0.04;
+      z-index: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    .wrap {
+      position: relative;
+      z-index: 1;
+      width: min(1080px, calc(100% - 2rem));
+      margin: 0 auto;
+      padding: 3rem 0 5rem;
+    }
+
+    /* —— Hero —— */
+    header.hero {
+      padding: 2.5rem 0 3.5rem;
+      border-bottom: 1px solid var(--line);
+      animation: rise 0.7s ease-out both;
+    }
+
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 1rem;
+    }
+
+    h1 {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: clamp(2rem, 4.5vw, 3rem);
+      letter-spacing: -0.025em;
+      line-height: 1.12;
+      max-width: 16ch;
+      margin-bottom: 1.25rem;
+    }
+
+    .lede {
+      font-size: 1.125rem;
+      color: var(--muted);
+      max-width: 38rem;
+    }
+
+    .lede strong { color: var(--ink); font-weight: 600; }
+
+    nav.toc {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1.25rem;
+      margin-top: 2rem;
+    }
+
+    nav.toc a {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+      transition: color 0.2s, border-color 0.2s;
+    }
+
+    nav.toc a:hover {
+      color: var(--accent);
+      border-color: var(--accent-dim);
+    }
+
+    /* —— Sections —— */
+    section {
+      padding: 3.5rem 0;
+      border-bottom: 1px solid var(--line);
+      animation: rise 0.6s ease-out both;
+    }
+
+    section:nth-of-type(1) { animation-delay: 0.05s; }
+    section:nth-of-type(2) { animation-delay: 0.1s; }
+    section:nth-of-type(3) { animation-delay: 0.15s; }
+    section:nth-of-type(4) { animation-delay: 0.2s; }
+    section:nth-of-type(5) { animation-delay: 0.25s; }
+
+    h2 {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: clamp(1.5rem, 3vw, 2rem);
+      letter-spacing: -0.02em;
+      margin-bottom: 0.5rem;
+    }
+
+    .section-sub {
+      color: var(--muted);
+      margin-bottom: 2rem;
+      max-width: 40rem;
+    }
+
+    h3 {
+      font-family: var(--font-display);
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin: 1.75rem 0 0.75rem;
+    }
+
+    p { margin-bottom: 1rem; color: var(--muted); }
+    p strong { color: var(--ink); }
+
+    /* —— Architecture diagram —— */
+    .arch {
+      display: grid;
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+    }
+
+    .arch-users,
+    .arch-dns,
+    .arch-regions {
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+      padding: 1rem 1.25rem;
+      position: relative;
+    }
+
+    .arch-users {
+      text-align: center;
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .arch-dns {
+      border-color: color-mix(in srgb, var(--dns) 45%, var(--line));
+      background: linear-gradient(135deg, #1a1910 0%, var(--bg-elev) 60%);
+    }
+
+    .arch-dns .label {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--dns);
+      margin-bottom: 0.35rem;
+    }
+
+    .arch-dns .title { font-weight: 600; color: var(--ink); }
+    .arch-dns .hint { font-size: 0.875rem; color: var(--muted); margin-top: 0.25rem; }
+
+    .flow-arrow {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      padding: 0.15rem 0;
+    }
+
+    .flow-arrow span.pulse {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: pulse 1.6s ease-in-out infinite;
+    }
+
+    .arch-regions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      padding: 1rem;
+      background: transparent;
+      border: none;
+    }
+
+    @media (max-width: 720px) {
+      .arch-regions { grid-template-columns: 1fr; }
+    }
+
+    .region {
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+      padding: 1.1rem 1.15rem;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.25s, transform 0.25s;
+    }
+
+    .region::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+    }
+
+    .region.a::before { background: var(--region-a); }
+    .region.b::before { background: var(--region-b); }
+    .region.a { border-color: color-mix(in srgb, var(--region-a) 35%, var(--line)); }
+    .region.b { border-color: color-mix(in srgb, var(--region-b) 35%, var(--line)); }
+
+    .region .tag {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 0.4rem;
+    }
+
+    .region.a .tag { color: var(--region-a); }
+    .region.b .tag { color: var(--region-b); }
+
+    .region h4 {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      margin-bottom: 0.85rem;
+    }
+
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .stack-item {
+      font-size: 0.85rem;
+      padding: 0.45rem 0.65rem;
+      background: #0c1210;
+      border: 1px solid var(--line);
+      font-family: var(--font-mono);
+      color: var(--ink);
+    }
+
+    .stack-item.muted { color: var(--muted); font-size: 0.8rem; }
+
+    .repl {
+      grid-column: 1 / -1;
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--muted);
+      padding: 0.5rem;
+      border: 1px dashed var(--line);
+    }
+
+    .repl em { color: var(--accent); font-style: normal; }
+
+    /* —— Layers —— */
+    .layers {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin-top: 1.5rem;
+      border: 1px solid var(--line);
+    }
+
+    .layer {
+      display: grid;
+      grid-template-columns: 7rem 1fr;
+      gap: 1rem;
+      padding: 1.1rem 1.25rem;
+      border-bottom: 1px solid var(--line);
+      align-items: start;
+      background: var(--bg-elev);
+      transition: background 0.2s;
+    }
+
+    .layer:last-child { border-bottom: none; }
+    .layer:hover { background: #18241e; }
+
+    @media (max-width: 560px) {
+      .layer { grid-template-columns: 1fr; gap: 0.35rem; }
+    }
+
+    .layer-id {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding-top: 0.15rem;
+    }
+
+    .layer:nth-child(1) .layer-id { color: var(--dns); }
+    .layer:nth-child(2) .layer-id { color: var(--region-a); }
+    .layer:nth-child(3) .layer-id { color: var(--accent); }
+    .layer:nth-child(4) .layer-id { color: var(--warn); }
+
+    .layer h4 {
+      font-family: var(--font-display);
+      font-size: 1rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .layer p { margin: 0; font-size: 0.925rem; }
+
+    /* —— Probe loop —— */
+    .probe {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto 1fr;
+      gap: 0.5rem;
+      align-items: center;
+      margin: 1.5rem 0;
+    }
+
+    @media (max-width: 720px) {
+      .probe {
+        grid-template-columns: 1fr;
+        text-align: center;
+      }
+      .probe .arrow { transform: rotate(90deg); margin: 0.25rem auto; }
+    }
+
+    .probe-box {
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+      padding: 1rem;
+      text-align: center;
+    }
+
+    .probe-box .who {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.35rem;
+    }
+
+    .probe-box .what { font-weight: 600; font-size: 0.95rem; }
+
+    .probe .arrow {
+      font-family: var(--font-mono);
+      color: var(--muted);
+      font-size: 1.25rem;
+      animation: nudge 1.8s ease-in-out infinite;
+    }
+
+    .outcomes {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+
+    @media (max-width: 560px) {
+      .outcomes { grid-template-columns: 1fr; }
+    }
+
+    .outcome {
+      padding: 1rem 1.15rem;
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+    }
+
+    .outcome.ok { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+    .outcome.bad { border-color: color-mix(in srgb, var(--danger) 40%, var(--line)); }
+
+    .outcome .status {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 0.35rem;
+    }
+
+    .outcome.ok .status { color: var(--accent); }
+    .outcome.bad .status { color: var(--danger); }
+
+    .outcome p { margin: 0; font-size: 0.9rem; }
+
+    /* —— Compare —— */
+    .compare {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+
+    @media (max-width: 720px) {
+      .compare { grid-template-columns: 1fr; }
+    }
+
+    .compare-col {
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+      padding: 1.25rem;
+    }
+
+    .compare-col h4 {
+      font-family: var(--font-display);
+      margin-bottom: 1rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .compare-col ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+
+    .compare-col li {
+      font-size: 0.9rem;
+      color: var(--muted);
+      padding-left: 1rem;
+      position: relative;
+    }
+
+    .compare-col li::before {
+      content: "→";
+      position: absolute;
+      left: 0;
+      color: var(--accent);
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      top: 0.15rem;
+    }
+
+    .compare-col li strong { color: var(--ink); }
+
+    /* —— Scenario sim —— */
+    .sim {
+      margin-top: 1.5rem;
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+      padding: 1.25rem;
+    }
+
+    .sim-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .sim-controls button {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      padding: 0.5rem 0.85rem;
+      border: 1px solid var(--line);
+      background: #0c1210;
+      color: var(--ink);
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, color 0.2s;
+    }
+
+    .sim-controls button:hover,
+    .sim-controls button.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    .sim-viz {
+      display: grid;
+      grid-template-columns: auto 1fr 1fr;
+      gap: 0.75rem;
+      align-items: stretch;
+    }
+
+    @media (max-width: 640px) {
+      .sim-viz { grid-template-columns: 1fr; }
+    }
+
+    .sim-dns {
+      padding: 1rem;
+      border: 1px solid color-mix(in srgb, var(--dns) 40%, var(--line));
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 0.35rem;
+      min-width: 7rem;
+    }
+
+    .sim-dns .label {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--dns);
+    }
+
+    .sim-dns .pointing {
+      font-weight: 700;
+      font-size: 1.1rem;
+      font-family: var(--font-display);
+      transition: color 0.3s;
+    }
+
+    .sim-region {
+      padding: 1rem;
+      border: 1px solid var(--line);
+      transition: opacity 0.3s, border-color 0.3s;
+    }
+
+    .sim-region .name {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+
+    .sim-region.a .name { color: var(--region-a); }
+    .sim-region.b .name { color: var(--region-b); }
+
+    .health-pill {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      padding: 0.2rem 0.5rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+
+    .health-pill.up {
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+
+    .health-pill.down {
+      background: #4a201c;
+      color: var(--danger);
+    }
+
+    .sim-note {
+      grid-column: 1 / -1;
+      margin-top: 0.25rem;
+      font-size: 0.9rem;
+      color: var(--muted);
+      min-height: 2.8em;
+    }
+
+    .sim-note strong { color: var(--ink); }
+
+    /* —— Table —— */
+    .table-wrap {
+      overflow-x: auto;
+      margin-top: 1.25rem;
+      border: 1px solid var(--line);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    th {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: var(--bg-elev);
+      font-weight: 500;
+    }
+
+    td { color: var(--muted); }
+    td strong { color: var(--ink); font-weight: 600; }
+    tr:last-child td { border-bottom: none; }
+
+    code {
+      font-family: var(--font-mono);
+      font-size: 0.85em;
+      color: var(--accent);
+      background: var(--accent-dim);
+      padding: 0.1em 0.35em;
+    }
+
+    footer {
+      padding-top: 2.5rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    footer a { color: var(--accent); }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    @keyframes nudge {
+      0%, 100% { transform: translateX(0); }
+      50% { transform: translateX(4px); }
+    }
+
+    @media (max-width: 720px) {
+      .probe .arrow { animation: none; }
+    }
+
+    /* —— Request flow —— */
+    .flow-mode {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .flow-mode button {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      padding: 0.55rem 0.95rem;
+      border: 1px solid var(--line);
+      background: #0c1210;
+      color: var(--ink);
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, color 0.2s;
+    }
+
+    .flow-mode button:hover,
+    .flow-mode button.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    .flow-mode button.active[data-flow="failover"] {
+      border-color: var(--danger);
+      color: var(--danger);
+      background: #4a201c;
+    }
+
+    .flow-panels { position: relative; }
+
+    .flow-panel { display: none; }
+    .flow-panel.active { display: block; animation: rise 0.35s ease-out both; }
+
+    .journey {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+    }
+
+    .journey-step {
+      display: grid;
+      grid-template-columns: 3.25rem 1fr;
+      gap: 0 1rem;
+      padding: 1.15rem 1.25rem;
+      border-bottom: 1px solid var(--line);
+      position: relative;
+    }
+
+    .journey-step:last-child { border-bottom: none; }
+
+    .journey-step .n {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--accent);
+      width: 2.25rem;
+      height: 2.25rem;
+      border: 1px solid var(--accent-dim);
+      background: #0c1210;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    .flow-panel[data-panel="failover"] .journey-step .n {
+      color: var(--warn);
+      border-color: #5a4020;
+    }
+
+    .journey-step .n::after {
+      content: "";
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      width: 1px;
+      height: calc(100% + 1.15rem);
+      background: var(--line);
+      transform: translateX(-50%);
+    }
+
+    .journey-step:last-child .n::after { display: none; }
+
+    .journey-step .body h4 {
+      font-family: var(--font-display);
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 0.3rem;
+      color: var(--ink);
+    }
+
+    .journey-step .body p {
+      margin: 0;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    .journey-step .body .where {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--region-a);
+      margin-bottom: 0.25rem;
+    }
+
+    .flow-panel[data-panel="failover"] .journey-step .body .where {
+      color: var(--region-b);
+    }
+
+    .journey-step .body .where.global { color: var(--dns); }
+    .journey-step .body .where.back { color: var(--accent); }
+
+    .dual-rail {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-top: 1.75rem;
+    }
+
+    @media (max-width: 720px) {
+      .dual-rail { grid-template-columns: 1fr; }
+    }
+
+    .rail {
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+      padding: 1.2rem 1.25rem;
+    }
+
+    .rail.primary {
+      border-color: color-mix(in srgb, var(--region-a) 40%, var(--line));
+    }
+
+    .rail.backup {
+      border-color: color-mix(in srgb, var(--region-b) 40%, var(--line));
+    }
+
+    .rail .rail-tag {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+
+    .rail.primary .rail-tag { color: var(--region-a); }
+    .rail.backup .rail-tag { color: var(--region-b); }
+
+    .rail h4 {
+      font-family: var(--font-display);
+      font-size: 1.05rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .rail ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+    }
+
+    .rail li {
+      font-size: 0.875rem;
+      color: var(--muted);
+      padding-left: 0.9rem;
+      position: relative;
+    }
+
+    .rail li::before {
+      content: "·";
+      position: absolute;
+      left: 0;
+      color: var(--accent);
+    }
+
+    .rail li strong { color: var(--ink); }
+
+    .path-strip {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.35rem 0.4rem;
+      margin: 1.5rem 0 0.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+    }
+
+    .path-strip .hop {
+      padding: 0.35rem 0.55rem;
+      border: 1px solid var(--line);
+      background: #0c1210;
+      color: var(--ink);
+    }
+
+    .path-strip .hop.a { border-color: color-mix(in srgb, var(--region-a) 50%, var(--line)); color: var(--region-a); }
+    .path-strip .hop.b { border-color: color-mix(in srgb, var(--region-b) 50%, var(--line)); color: var(--region-b); }
+    .path-strip .hop.dns { border-color: color-mix(in srgb, var(--dns) 50%, var(--line)); color: var(--dns); }
+    .path-strip .sep { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+  <div class="wrap">
+    <header class="hero">
+      <p class="eyebrow">branch-protection-infra · concepts</p>
+      <h1>Multi-region health &amp; failover</h1>
+      <p class="lede">
+        How production decides <strong>healthy vs not</strong>, who probes what,
+        and how traffic moves between regions — from a cheap EC2 lab up to ALB + VPC.
+      </p>
+      <nav class="toc" aria-label="Sections">
+        <a href="#map">Map</a>
+        <a href="#request-flow">Request flow</a>
+        <a href="#layers">Health layers</a>
+        <a href="#probe">How probes work</a>
+        <a href="#lab-vs-prod">Lab vs prod</a>
+        <a href="#sim">Failover sim</a>
+      </nav>
+    </header>
+
+    <section id="map">
+      <h2>Architecture map</h2>
+      <p class="section-sub">
+        Users never talk to EC2 directly in production. DNS (or Global Accelerator) picks a region;
+        the regional ALB picks healthy targets inside that VPC.
+      </p>
+
+      <div class="arch" aria-label="Multi-region architecture diagram">
+        <div class="arch-users">Users · browsers · APIs</div>
+        <div class="flow-arrow"><span class="pulse"></span> HTTPS · DNS lookup</div>
+        <div class="arch-dns">
+          <div class="label">Global traffic control</div>
+          <div class="title">Route 53 failover / latency · or Global Accelerator</div>
+          <div class="hint">Health-checks each region’s entrypoint · steers DNS / anycast</div>
+        </div>
+        <div class="flow-arrow"><span class="pulse"></span> primary healthy → A · else → B</div>
+        <div class="arch-regions">
+          <div class="region a">
+            <div class="tag">Region A · primary</div>
+            <h4>e.g. ap-southeast-1</h4>
+            <div class="stack">
+              <div class="stack-item">ALB (public subnets, multi-AZ)</div>
+              <div class="stack-item">App targets · private subnets</div>
+              <div class="stack-item">VPC · SG · NAT (as needed)</div>
+              <div class="stack-item muted">DB primary / writer</div>
+            </div>
+          </div>
+          <div class="region b">
+            <div class="tag">Region B · standby / secondary</div>
+            <h4>e.g. ap-southeast-2</h4>
+            <div class="stack">
+              <div class="stack-item">ALB (same shape)</div>
+              <div class="stack-item">App targets · private subnets</div>
+              <div class="stack-item">VPC · SG · NAT (as needed)</div>
+              <div class="stack-item muted">DB replica / reader</div>
+            </div>
+          </div>
+          <div class="repl">DB replication A <em>→</em> B · promote on failover when writes matter</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="request-flow">
+      <h2>Complete request flow</h2>
+      <p class="section-sub">
+        One user HTTPS request from start to response — how it travels through
+        <strong>primary</strong> infrastructure, what the <strong>backup</strong> region is doing,
+        and how the path changes after failover.
+      </p>
+
+      <div class="flow-mode" role="group" aria-label="Request path mode">
+        <button type="button" class="active" data-flow="primary">Primary path (normal)</button>
+        <button type="button" data-flow="failover">Failover path (A down)</button>
+      </div>
+
+      <div class="flow-panels">
+        <!-- PRIMARY -->
+        <div class="flow-panel active" data-panel="primary" id="panel-primary">
+          <div class="path-strip" aria-hidden="true">
+            <span class="hop">User</span><span class="sep">→</span>
+            <span class="hop dns">DNS</span><span class="sep">→</span>
+            <span class="hop a">ALB A</span><span class="sep">→</span>
+            <span class="hop a">App A</span><span class="sep">→</span>
+            <span class="hop a">DB primary</span><span class="sep">→</span>
+            <span class="hop">Response</span>
+          </div>
+
+          <div class="journey" aria-label="Happy-path request steps">
+            <div class="journey-step">
+              <div class="n">01</div>
+              <div class="body">
+                <div class="where global">Client</div>
+                <h4>User opens the app</h4>
+                <p>
+                  Browser or API client requests <code>https://app.example.com/...</code>.
+                  It only knows the hostname — not which region or EC2 will answer.
+                </p>
+              </div>
+            </div>
+            <div class="journey-step">
+              <div class="n">02</div>
+              <div class="body">
+                <div class="where global">DNS · Route 53</div>
+                <h4>Resolve name → primary region</h4>
+                <p>
+                  Resolver asks Route 53. Failover policy sees health check on region A = <strong>Healthy</strong>,
+                  so the answer is region A’s entrypoint (ALB DNS name, or EIP in a cheap lab).
+                  Result is cached for the record’s <strong>TTL</strong>.
+                </p>
+              </div>
+            </div>
+            <div class="journey-step">
+              <div class="n">03</div>
+              <div class="body">
+                <div class="where">Region A · edge of VPC</div>
+                <h4>TLS hits the ALB</h4>
+                <p>
+                  Packet enters AWS in region A. The <strong>Application Load Balancer</strong> in
+                  <strong>public subnets</strong> (multi-AZ) terminates TLS (or passes through),
+                  matches a listener rule, and picks a target group.
+                </p>
+              </div>
+            </div>
+            <div class="journey-step">
+              <div class="n">04</div>
+              <div class="body">
+                <div class="where">Region A · ALB → targets</div>
+                <h4>Only healthy app targets get the request</h4>
+                <p>
+                  ALB already runs its own health checks on each instance/pod (<code>/ready</code>).
+                  Unhealthy targets are skipped. Traffic stays <strong>inside the VPC</strong>
+                  to private subnets via security groups — users never SSH to app nodes.
+                </p>
+              </div>
+            </div>
+            <div class="journey-step">
+              <div class="n">05</div>
+              <div class="body">
+                <div class="where">Region A · app</div>
+                <h4>Application handles business logic</h4>
+                <p>
+                  App authenticates, validates, and (for writes/reads) opens a connection to the
+                  <strong>database writer</strong> endpoint in region A — typically private IP / RDS in private subnets.
+                </p>
+              </div>
+            </div>
+            <div class="journey-step">
+              <div class="n">06</div>
+              <div class="body">
+                <div class="where">Region A · data</div>
+                <h4>Primary DB serves; replica is updated async</h4>
+                <p>
+                  Postgres / Aurora <strong>primary</strong> commits the change (or returns the read).
+                  Streaming / Aurora replication pushes WAL to region B’s replica in the background —
+                  <strong>not on the user request path</strong>, but it defines your RPO.
+                </p>
+              </div>
+            </div>
+            <div class="journey-step">
+              <div class="n">07</div>
+              <div class="body">
+                <div class="where back">Return path</div>
+                <h4>Response travels back the same way</h4>
+                <p>
+                  App → ALB → internet → user. Region B’s ALB and app were <strong>not</strong> on this hop list.
+                  They stayed warm: deployed, health-checked, replica applying logs — ready if DNS flips.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FAILOVER -->
+        <div class="flow-panel" data-panel="failover" id="panel-failover">
+          <div class="path-strip" aria-hidden="true">
+            <span class="hop">User</span><span class="sep">→</span>
+            <span class="hop dns">DNS</span><span class="sep">→</span>
+            <span class="hop b">ALB B</span><span class="sep">→</span>
+            <span class="hop b">App B</span><span class="sep">→</span>
+            <span class="hop b">DB (promoted)</span><span class="sep">→</span>
+            <span class="hop">Response</span>
+          </div>
+
+          <div class="journey" aria-label="Failover request steps">
+            <div class="journey-step">
+              <div class="n">01</div>
+              <div class="body">
+                <div class="where global">Before the user request</div>
+                <h4>Region A fails health checks</h4>
+                <p>
+                  Route 53 (or AGA) keeps probing A’s <code>/healthz</code>. After
+                  <strong>interval × failure threshold</strong>, A is <strong>Unhealthy</strong>
+                  (app down, ALB 502s, network block, etc.). This happens on AWS’s schedule — not inside your VPC cron.
+                </p>
+              </div>
+            </div>
+            <div class="journey-step">
+              <div class="n">02</div>
+              <div class="body">
+                <div class="where global">DNS · Route 53</div>
+                <h4>Same hostname, new answer → region B</h4>
+                <p>
+                  Failover record stops returning A. New DNS lookups get B’s ALB (or EIP).
+                  Clients still on cached TTL may hit A until cache expires — that is why TTL matters for RTO.
+                </p>
+              </div>
+            </div>
+            <div class="journey-step">
+              <div class="n">03</div>
+              <div class="body">
+                <div class="where">Region B · edge of VPC</div>
+                <h4>User request lands on backup ALB</h4>
+                <p>
+                  Same hostname from the user’s point of view. TLS and listener rules now run in
+                  <strong>region B’s VPC</strong> — a separate failure domain, not a warm standby process on A’s box.
+                </p>
+              </div>
+            </div>
+            <div class="journey-step">
+              <div class="n">04</div>
+              <div class="body">
+                <div class="where">Region B · ALB → targets</div>
+                <h4>Healthy B targets take traffic</h4>
+                <p>
+                  B’s ALB has been health-checking its own targets the whole time. Only ready app tasks in B’s
+                  private subnets receive the request.
+                </p>
+              </div>
+            </div>
+            <div class="journey-step">
+              <div class="n">05</div>
+              <div class="body">
+                <div class="where">Region B · data (critical)</div>
+                <h4>Reads may work; writes need promote</h4>
+                <p>
+                  DNS failover alone does <strong>not</strong> make B the DB primary. For writes: promote the replica
+                  (or use Aurora Global / similar), <strong>fence</strong> A so it cannot accept writes, then point the
+                  app at the new writer. Skipping fencing → split-brain.
+                </p>
+              </div>
+            </div>
+            <div class="journey-step">
+              <div class="n">06</div>
+              <div class="body">
+                <div class="where back">Return path</div>
+                <h4>Response from B · A stays out of the path</h4>
+                <p>
+                  App B → ALB B → user. Region A may still be “running” in the console; it simply must not
+                  receive user DNS or act as writer until failback is deliberate and safe.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dual-rail">
+        <div class="rail primary">
+          <div class="rail-tag">While primary is active</div>
+          <h4>Region A (primary)</h4>
+          <ul>
+            <li><strong>Serves 100%</strong> of user traffic (active/passive)</li>
+            <li><strong>ALB</strong> spreads load across AZs / healthy targets</li>
+            <li><strong>DB</strong> is the writer; commits are authoritative</li>
+            <li>Publishes replication to B continuously</li>
+            <li>Must pass Route 53 <strong>and</strong> ALB health checks</li>
+          </ul>
+        </div>
+        <div class="rail backup">
+          <div class="rail-tag">At the same time</div>
+          <h4>Region B (backup)</h4>
+          <ul>
+            <li><strong>Does not</strong> get normal user DNS (passive mode)</li>
+            <li>Stack is <strong>deployed &amp; warm</strong> — same app version ideally</li>
+            <li>ALB still health-checks local targets (so B is ready)</li>
+            <li>DB is <strong>replica</strong> — applying WAL; lag = RPO risk</li>
+            <li>Route 53 may also check B so secondary is known-good</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3>What travels with the request vs what does not</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>On the request path</th>
+              <th>Off the request path (background)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>DNS lookup</strong> → ALB → app → DB query → response</td>
+              <td><strong>Route 53 / AGA probes</strong> every 10–30s</td>
+            </tr>
+            <tr>
+              <td><strong>ALB</strong> choosing a healthy target for <em>this</em> connection</td>
+              <td><strong>ALB target health</strong> polling all instances</td>
+            </tr>
+            <tr>
+              <td><strong>App</strong> read/write to current DB endpoint</td>
+              <td><strong>Replication</strong> A → B; metrics; deploys to standby</td>
+            </tr>
+            <tr>
+              <td><strong>Security groups / VPC routing</strong> for that hop</td>
+              <td><strong>DB promote / fencing</strong> (human or automation on failover)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="layers">
+      <h2>Four layers of “healthy”</h2>
+      <p class="section-sub">
+        AWS runs the probes. <strong>You</strong> define what success means — mostly via
+        <code>/healthz</code> or <code>/ready</code>, plus thresholds.
+      </p>
+
+      <div class="layers">
+        <div class="layer">
+          <div class="layer-id">Layer 0</div>
+          <div>
+            <h4>Your app endpoint</h4>
+            <p>
+              Return <strong>200</strong> only if this instance should take traffic
+              (process up, DB reachable, optionally “I am writer”). Return <strong>503</strong> otherwise.
+              This is the real metric.
+            </p>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer-id">Layer 1</div>
+          <div>
+            <h4>ALB target health · in-region</h4>
+            <p>
+              ALB polls each instance/pod on a path you set. Unhealthy targets get no new requests.
+              Other AZs in the same region can still serve. ALB does <strong>not</strong> fail over to another region.
+            </p>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer-id">Layer 2</div>
+          <div>
+            <h4>Route 53 / Global Accelerator · cross-region</h4>
+            <p>
+              External checkers hit the region entrypoint (ALB or public URL). After N failures →
+              mark region unhealthy → DNS/anycast sends users to the other region.
+            </p>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer-id">Layer 3</div>
+          <div>
+            <h4>Data plane · separate decision</h4>
+            <p>
+              DNS moving traffic ≠ promoting Postgres/Aurora. Writer fencing and replica promote
+              are runbooks (or managed global DB). Avoid dual-primary split-brain.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Component</th>
+              <th>Scope</th>
+              <th>You set</th>
+              <th>Effect</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>ALB target group</strong></td>
+              <td>Instance / pod</td>
+              <td>Path, codes, interval, thresholds</td>
+              <td>Drop bad targets in-region</td>
+            </tr>
+            <tr>
+              <td><strong>Route 53 health check</strong></td>
+              <td>Region entrypoint</td>
+              <td>URL, interval, failure threshold</td>
+              <td>Flip DNS to other region</td>
+            </tr>
+            <tr>
+              <td><strong>Global Accelerator</strong></td>
+              <td>Regional endpoint</td>
+              <td>Similar health config</td>
+              <td>Steer anycast IP</td>
+            </tr>
+            <tr>
+              <td><strong><code>/ready</code></strong></td>
+              <td>Business logic</td>
+              <td>When to return 200 vs 503</td>
+              <td>Feeds every checker above</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="probe">
+      <h2>How a constant health check works</h2>
+      <p class="section-sub">
+        Example: Route 53 every 30s, failure threshold 3. You do not run the cron —
+        AWS (or Cloudflare) does.
+      </p>
+
+      <div class="probe" aria-hidden="true">
+        <div class="probe-box">
+          <div class="who">Checker</div>
+          <div class="what">Route 53 / Cloudflare</div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="probe-box">
+          <div class="who">Request</div>
+          <div class="what">GET /healthz</div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="probe-box">
+          <div class="who">Your app</div>
+          <div class="what">200 or 503</div>
+        </div>
+      </div>
+
+      <div class="outcomes">
+        <div class="outcome ok">
+          <div class="status">Healthy</div>
+          <p>Connect OK + status in success range (e.g. 2xx), enough times in a row → keep primary DNS.</p>
+        </div>
+        <div class="outcome bad">
+          <div class="status">Unhealthy</div>
+          <p>Timeout, connection fail, or non-success status × failure threshold → failover to secondary.</p>
+        </div>
+      </div>
+
+      <h3>Knobs you set on the AWS check</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Knob</th>
+              <th>Meaning</th>
+              <th>Lab start</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Protocol / path</strong></td>
+              <td>What to call</td>
+              <td>HTTPS · <code>/healthz</code></td>
+            </tr>
+            <tr>
+              <td><strong>Request interval</strong></td>
+              <td>How often AWS probes</td>
+              <td>30s (or 10s)</td>
+            </tr>
+            <tr>
+              <td><strong>Failure threshold</strong></td>
+              <td>Fails in a row → Unhealthy</td>
+              <td>3</td>
+            </tr>
+            <tr>
+              <td><strong>DNS TTL</strong></td>
+              <td>How long clients cache the old IP</td>
+              <td>60s (dominates RTO)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="margin-top: 1.25rem;">
+        Rough RTO ≈ <code>(interval × failures) + TTL</code>.
+        Example: 30×3 + 60 ≈ <strong>~2–3+ minutes</strong>, not instant.
+      </p>
+    </section>
+
+    <section id="lab-vs-prod">
+      <h2>Cheap EC2 lab vs production</h2>
+      <p class="section-sub">
+        Same mental model. Production adds VPC shape, ALB, and multi-AZ — not a different idea of health.
+      </p>
+
+      <div class="compare">
+        <div class="compare-col">
+          <h4>Cheap lab</h4>
+          <ul>
+            <li><strong>Default VPC</strong> · public EC2 + EIP</li>
+            <li><strong>One box</strong> = app + maybe Postgres</li>
+            <li><strong>Route 53</strong> health → failover DNS</li>
+            <li><strong>No NAT / ALB</strong> needed to learn</li>
+            <li>Manual / scripted DB promote</li>
+          </ul>
+        </div>
+        <div class="compare-col">
+          <h4>Production</h4>
+          <ul>
+            <li><strong>Custom VPC</strong> · public ALB, private apps</li>
+            <li><strong>ALB + ASG/EKS</strong> multi-AZ in each region</li>
+            <li><strong>Route 53 or AGA</strong> for region steer</li>
+            <li>Aurora Global / DDB global / rehearsed promote</li>
+            <li>Game days · measured RTO/RPO</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="sim">
+      <h2>Failover sim</h2>
+      <p class="section-sub">
+        Click a failure mode. Watch where DNS points. (Illustrative — timing is simplified.)
+      </p>
+
+      <div class="sim">
+        <div class="sim-controls" role="group" aria-label="Failure scenarios">
+          <button type="button" class="active" data-scenario="ok">All healthy</button>
+          <button type="button" data-scenario="app">App down on A</button>
+          <button type="button" data-scenario="region">Region A unreachable</button>
+          <button type="button" data-scenario="db">DB primary dead</button>
+          <button type="button" data-scenario="recover">A recovered</button>
+        </div>
+
+        <div class="sim-viz">
+          <div class="sim-dns">
+            <div class="label">DNS</div>
+            <div class="pointing" id="dns-target">→ Region A</div>
+          </div>
+          <div class="sim-region a" id="reg-a">
+            <div class="name">Region A</div>
+            <div class="health-pill up" id="pill-a">Healthy</div>
+            <p id="detail-a" style="margin:0;font-size:0.85rem;color:var(--muted);">ALB / EC2 serving · DB primary</p>
+          </div>
+          <div class="sim-region b" id="reg-b">
+            <div class="name">Region B</div>
+            <div class="health-pill up" id="pill-b">Healthy</div>
+            <p id="detail-b" style="margin:0;font-size:0.85rem;color:var(--muted);">Standby · replica</p>
+          </div>
+          <p class="sim-note" id="sim-note">
+            <strong>Idle.</strong> Route 53 keeps primary → A. Users never see B.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <p>
+        Visual companion for multi-region / health-check discussions in
+        <strong style="color: var(--ink);">branch-protection-infra</strong>.
+        Open this file in a browser — no build step.
+      </p>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      document.querySelectorAll(".flow-mode button").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          document.querySelectorAll(".flow-mode button").forEach(function (b) {
+            b.classList.remove("active");
+          });
+          btn.classList.add("active");
+          var which = btn.getAttribute("data-flow");
+          document.querySelectorAll(".flow-panel").forEach(function (p) {
+            p.classList.toggle("active", p.getAttribute("data-panel") === which);
+          });
+        });
+      });
+
+      const scenarios = {
+        ok: {
+          dns: "→ Region A",
+          dnsColor: "var(--region-a)",
+          a: { up: true, text: "ALB / EC2 serving · DB primary" },
+          b: { up: true, text: "Standby · replica" },
+          note: "<strong>Idle.</strong> Route 53 keeps primary → A. Users never see B.",
+        },
+        app: {
+          dns: "→ Region B",
+          dnsColor: "var(--region-b)",
+          a: { up: false, text: "/healthz → 503 · ALB drains targets" },
+          b: { up: true, text: "Now receiving user traffic" },
+          note: "<strong>App-only outage.</strong> After interval × failure threshold (+ TTL), DNS fails over to B. DB promote not required for read-only demos.",
+        },
+        region: {
+          dns: "→ Region B",
+          dnsColor: "var(--region-b)",
+          a: { up: false, text: "Probes timeout · SG deny or instance stopped" },
+          b: { up: true, text: "Serving as secondary" },
+          note: "<strong>Region unreachable.</strong> Same DNS path as app down. EC2 “running” status alone must not be your only signal.",
+        },
+        db: {
+          dns: "→ Region B",
+          dnsColor: "var(--region-b)",
+          a: { up: false, text: "/healthz fails DB ping → 503" },
+          b: { up: true, text: "Traffic here · still need promote for writes" },
+          note: "<strong>DB primary dead.</strong> DNS moves readers. Writes need replica promote + fencing A — DNS does not do that for you.",
+        },
+        recover: {
+          dns: "→ Region A",
+          dnsColor: "var(--region-a)",
+          a: { up: true, text: "Healthy again · resynced as needed" },
+          b: { up: true, text: "Back to standby" },
+          note: "<strong>Failback.</strong> Only flip DNS to A after A is healthy and you are not dual-writing. Failback is as important as failover.",
+        },
+      };
+
+      const dnsEl = document.getElementById("dns-target");
+      const pillA = document.getElementById("pill-a");
+      const pillB = document.getElementById("pill-b");
+      const detailA = document.getElementById("detail-a");
+      const detailB = document.getElementById("detail-b");
+      const note = document.getElementById("sim-note");
+      const regA = document.getElementById("reg-a");
+      const regB = document.getElementById("reg-b");
+
+      function apply(key) {
+        const s = scenarios[key];
+        dnsEl.textContent = s.dns;
+        dnsEl.style.color = s.dnsColor;
+
+        pillA.textContent = s.a.up ? "Healthy" : "Unhealthy";
+        pillA.className = "health-pill " + (s.a.up ? "up" : "down");
+        detailA.textContent = s.a.text;
+        regA.style.opacity = s.a.up ? "1" : "0.55";
+
+        pillB.textContent = s.b.up ? "Healthy" : "Unhealthy";
+        pillB.className = "health-pill " + (s.b.up ? "up" : "down");
+        detailB.textContent = s.b.text;
+        regB.style.opacity = s.b.up ? "1" : "0.55";
+
+        note.innerHTML = s.note;
+      }
+
+      document.querySelectorAll(".sim-controls button").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          document.querySelectorAll(".sim-controls button").forEach(function (b) {
+            b.classList.remove("active");
+          });
+          btn.classList.add("active");
+          apply(btn.getAttribute("data-scenario"));
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

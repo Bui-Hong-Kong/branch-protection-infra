@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DB promotion during an incident</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c1210;
+      --bg-elev: #141c18;
+      --ink: #e8f0ea;
+      --muted: #8fa396;
+      --line: #2a3a32;
+      --accent: #3dd68c;
+      --accent-dim: #1a4d36;
+      --warn: #e8b84a;
+      --danger: #e86a5a;
+      --region-a: #4db8ff;
+      --region-b: #c084fc;
+      --dns: #f0d78c;
+      --font-display: "Figtree", system-ui, sans-serif;
+      --font-body: "Figtree", system-ui, sans-serif;
+      --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.55;
+      min-height: 100vh;
+      background-image:
+        radial-gradient(ellipse 70% 45% at 85% -5%, #3d1a28 0%, transparent 50%),
+        radial-gradient(ellipse 80% 50% at 5% 0%, #1a3d2e 0%, transparent 55%),
+        linear-gradient(180deg, var(--bg) 0%, #0a0f0d 100%);
+    }
+
+    .noise {
+      pointer-events: none;
+      position: fixed;
+      inset: 0;
+      opacity: 0.04;
+      z-index: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    .wrap {
+      position: relative;
+      z-index: 1;
+      width: min(1080px, calc(100% - 2rem));
+      margin: 0 auto;
+      padding: 3rem 0 5rem;
+    }
+
+    header.hero {
+      padding: 2.5rem 0 3.5rem;
+      border-bottom: 1px solid var(--line);
+      animation: rise 0.7s ease-out both;
+    }
+
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--warn);
+      margin-bottom: 1rem;
+    }
+
+    h1 {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: clamp(2rem, 4.5vw, 3rem);
+      letter-spacing: -0.025em;
+      line-height: 1.12;
+      max-width: 18ch;
+      margin-bottom: 1.25rem;
+    }
+
+    .lede {
+      font-size: 1.125rem;
+      color: var(--muted);
+      max-width: 40rem;
+    }
+
+    .lede strong { color: var(--ink); font-weight: 600; }
+
+    nav.toc {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1.25rem;
+      margin-top: 2rem;
+    }
+
+    nav.toc a {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+      transition: color 0.2s, border-color 0.2s;
+    }
+
+    nav.toc a:hover {
+      color: var(--accent);
+      border-color: var(--accent-dim);
+    }
+
+    .related {
+      margin-top: 1.25rem;
+      font-size: 0.875rem;
+      color: var(--muted);
+    }
+
+    .related a { color: var(--accent); }
+
+    section {
+      padding: 3.5rem 0;
+      border-bottom: 1px solid var(--line);
+      animation: rise 0.6s ease-out both;
+    }
+
+    h2 {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: clamp(1.5rem, 3vw, 2rem);
+      letter-spacing: -0.02em;
+      margin-bottom: 0.5rem;
+    }
+
+    .section-sub {
+      color: var(--muted);
+      margin-bottom: 2rem;
+      max-width: 42rem;
+    }
+
+    h3 {
+      font-family: var(--font-display);
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin: 1.75rem 0 0.75rem;
+      color: var(--ink);
+    }
+
+    p { margin-bottom: 1rem; color: var(--muted); }
+    p strong { color: var(--ink); }
+
+    code {
+      font-family: var(--font-mono);
+      font-size: 0.85em;
+      color: var(--accent);
+      background: var(--accent-dim);
+      padding: 0.1em 0.35em;
+    }
+
+    /* Roles diagram */
+    .roles {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 0.75rem;
+      align-items: stretch;
+      margin-top: 1rem;
+    }
+
+    @media (max-width: 720px) {
+      .roles {
+        grid-template-columns: 1fr;
+      }
+      .roles .repl-arrow { transform: rotate(90deg); justify-self: center; }
+    }
+
+    .db-box {
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+      padding: 1.2rem 1.25rem;
+    }
+
+    .db-box.primary {
+      border-color: color-mix(in srgb, var(--region-a) 45%, var(--line));
+    }
+
+    .db-box.replica {
+      border-color: color-mix(in srgb, var(--region-b) 45%, var(--line));
+    }
+
+    .db-box .tag {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 0.4rem;
+    }
+
+    .db-box.primary .tag { color: var(--region-a); }
+    .db-box.replica .tag { color: var(--region-b); }
+
+    .db-box h4 {
+      font-family: var(--font-display);
+      font-size: 1.15rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .db-box ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .db-box li {
+      font-size: 0.875rem;
+      color: var(--muted);
+      padding-left: 0.85rem;
+      position: relative;
+    }
+
+    .db-box li::before {
+      content: "·";
+      position: absolute;
+      left: 0;
+      color: var(--accent);
+    }
+
+    .db-box li strong { color: var(--ink); }
+
+    .repl-arrow {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 0.5rem;
+    }
+
+    .repl-arrow .line {
+      font-size: 1.25rem;
+      color: var(--accent);
+      animation: nudge 1.8s ease-in-out infinite;
+    }
+
+    /* Timeline */
+    .timeline {
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+      margin-top: 0.5rem;
+    }
+
+    .tl-step {
+      display: grid;
+      grid-template-columns: 3.25rem 1fr;
+      gap: 0 1rem;
+      padding: 1.15rem 1.25rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .tl-step:last-child { border-bottom: none; }
+
+    .tl-step .n {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      width: 2.25rem;
+      height: 2.25rem;
+      border: 1px solid var(--accent-dim);
+      background: #0c1210;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    .tl-step.danger .n {
+      color: var(--danger);
+      border-color: #5a2820;
+    }
+
+    .tl-step.warn .n {
+      color: var(--warn);
+      border-color: #5a4020;
+    }
+
+    .tl-step .n::after {
+      content: "";
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      width: 1px;
+      height: calc(100% + 1.15rem);
+      background: var(--line);
+      transform: translateX(-50%);
+    }
+
+    .tl-step:last-child .n::after { display: none; }
+
+    .tl-step .phase {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.25rem;
+    }
+
+    .tl-step.danger .phase { color: var(--danger); }
+    .tl-step.warn .phase { color: var(--warn); }
+
+    .tl-step h4 {
+      font-family: var(--font-display);
+      font-size: 1rem;
+      margin-bottom: 0.3rem;
+    }
+
+    .tl-step p {
+      margin: 0;
+      font-size: 0.9rem;
+    }
+
+    /* Before / after */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-top: 1.25rem;
+    }
+
+    @media (max-width: 720px) {
+      .before-after { grid-template-columns: 1fr; }
+    }
+
+    .ba {
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+      padding: 1.2rem 1.25rem;
+    }
+
+    .ba .label {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 0.75rem;
+    }
+
+    .ba.before .label { color: var(--region-a); }
+    .ba.after .label { color: var(--region-b); }
+
+    .ba h4 {
+      font-family: var(--font-display);
+      margin-bottom: 0.85rem;
+      font-size: 1.05rem;
+    }
+
+    .role-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.45rem 0;
+      border-bottom: 1px solid var(--line);
+      font-size: 0.875rem;
+    }
+
+    .role-row:last-child { border-bottom: none; }
+    .role-row .k { color: var(--muted); }
+    .role-row .v { color: var(--ink); font-family: var(--font-mono); font-size: 0.8rem; }
+
+    /* Split brain */
+    .alert {
+      border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--line));
+      background: linear-gradient(135deg, #2a1412 0%, var(--bg-elev) 70%);
+      padding: 1.25rem 1.35rem;
+      margin-top: 1rem;
+    }
+
+    .alert .alert-tag {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--danger);
+      margin-bottom: 0.4rem;
+    }
+
+    .alert h4 {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .alert p { margin-bottom: 0.65rem; }
+    .alert p:last-child { margin-bottom: 0; }
+
+    /* Checklist */
+    .checks {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      border: 1px solid var(--line);
+      margin-top: 1rem;
+    }
+
+    .check {
+      display: grid;
+      grid-template-columns: 2rem 1fr;
+      gap: 0.75rem;
+      padding: 0.95rem 1.15rem;
+      border-bottom: 1px solid var(--line);
+      background: var(--bg-elev);
+      align-items: start;
+    }
+
+    .check:last-child { border-bottom: none; }
+
+    .check .box {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--accent);
+      margin-top: 0.15rem;
+    }
+
+    .check h4 {
+      font-family: var(--font-display);
+      font-size: 0.95rem;
+      margin-bottom: 0.2rem;
+    }
+
+    .check p { margin: 0; font-size: 0.875rem; }
+
+    /* Sim */
+    .sim {
+      margin-top: 1.25rem;
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+      padding: 1.25rem;
+    }
+
+    .sim-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .sim-controls button {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      padding: 0.5rem 0.85rem;
+      border: 1px solid var(--line);
+      background: #0c1210;
+      color: var(--ink);
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, color 0.2s;
+    }
+
+    .sim-controls button:hover,
+    .sim-controls button.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    .sim-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    @media (max-width: 560px) {
+      .sim-grid { grid-template-columns: 1fr; }
+    }
+
+    .sim-db {
+      border: 1px solid var(--line);
+      padding: 1rem;
+      transition: opacity 0.3s, border-color 0.3s;
+    }
+
+    .sim-db .name {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+
+    .sim-db.a .name { color: var(--region-a); }
+    .sim-db.b .name { color: var(--region-b); }
+
+    .pill {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      padding: 0.2rem 0.5rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+
+    .pill.writer { background: var(--accent-dim); color: var(--accent); }
+    .pill.replica { background: #1a2840; color: var(--region-a); }
+    .pill.down { background: #4a201c; color: var(--danger); }
+    .pill.fenced { background: #3d3520; color: var(--warn); }
+
+    .sim-note {
+      grid-column: 1 / -1;
+      margin-top: 0.75rem;
+      font-size: 0.9rem;
+      color: var(--muted);
+      min-height: 3.2em;
+    }
+
+    .sim-note strong { color: var(--ink); }
+
+    .table-wrap {
+      overflow-x: auto;
+      margin-top: 1.25rem;
+      border: 1px solid var(--line);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    th {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: var(--bg-elev);
+      font-weight: 500;
+    }
+
+    td { color: var(--muted); }
+    td strong { color: var(--ink); font-weight: 600; }
+    tr:last-child td { border-bottom: none; }
+
+    .rpo-box {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-top: 1.25rem;
+    }
+
+    @media (max-width: 560px) {
+      .rpo-box { grid-template-columns: 1fr; }
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+      padding: 1.15rem 1.25rem;
+    }
+
+    .metric .m-label {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--warn);
+      margin-bottom: 0.35rem;
+    }
+
+    .metric .m-value {
+      font-family: var(--font-display);
+      font-size: 1.35rem;
+      font-weight: 700;
+      margin-bottom: 0.4rem;
+    }
+
+    .metric p { margin: 0; font-size: 0.875rem; }
+
+    footer {
+      padding-top: 2.5rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    footer a { color: var(--accent); }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes nudge {
+      0%, 100% { transform: translateX(0); }
+      50% { transform: translateX(4px); }
+    }
+
+    @media (max-width: 720px) {
+      .repl-arrow .line { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+  <div class="wrap">
+    <header class="hero">
+      <p class="eyebrow">branch-protection-infra · incidents</p>
+      <h1>DB promotion when things break</h1>
+      <p class="lede">
+        DNS can move <strong>users</strong> to region B. Promotion makes B the
+        <strong>database writer</strong>. Mixing those up — or skipping fencing —
+        is how you get split-brain.
+      </p>
+      <nav class="toc" aria-label="Sections">
+        <a href="#roles">Roles</a>
+        <a href="#timeline">Incident timeline</a>
+        <a href="#fence">Fence &amp; promote</a>
+        <a href="#split-brain">Split-brain</a>
+        <a href="#sim">Promote sim</a>
+        <a href="#failback">Failback</a>
+      </nav>
+      <p class="related">
+        Pair with
+        <a href="./multi-region-health.html">multi-region-health.html</a>
+        for DNS / ALB traffic flow.
+      </p>
+    </header>
+
+    <section id="roles">
+      <h2>Before the incident · who writes?</h2>
+      <p class="section-sub">
+        In active/passive multi-region, only one database accepts writes.
+        The other is a replica applying the primary’s change stream.
+      </p>
+
+      <div class="roles">
+        <div class="db-box primary">
+          <div class="tag">Region A</div>
+          <h4>Primary · writer</h4>
+          <ul>
+            <li><strong>Accepts writes</strong> from the app</li>
+            <li>Source of truth for commits</li>
+            <li>Ships WAL / redo to replica</li>
+            <li>App “writer endpoint” points here</li>
+          </ul>
+        </div>
+        <div class="repl-arrow">
+          <span>Replication</span>
+          <span class="line">→</span>
+          <span>async</span>
+        </div>
+        <div class="db-box replica">
+          <div class="tag">Region B</div>
+          <h4>Replica · reader (or idle)</h4>
+          <ul>
+            <li><strong>Read-only</strong> until promoted</li>
+            <li>Applies changes from A</li>
+            <li>May lag (this is your <strong>RPO</strong>)</li>
+            <li>Warm standby for promote</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="rpo-box">
+        <div class="metric">
+          <div class="m-label">RPO</div>
+          <div class="m-value">How much data you may lose</div>
+          <p>Transactions on A not yet applied on B when A dies. Async replica ⇒ seconds of risk, not zero.</p>
+        </div>
+        <div class="metric">
+          <div class="m-label">RTO</div>
+          <div class="m-value">How long until writes work again</div>
+          <p>Detect + fence A + promote B + point apps + verify. DNS failover alone is not full RTO for writes.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="timeline">
+      <h2>Incident timeline</h2>
+      <p class="section-sub">
+        Example: region A primary is gone (crash, network, AZ/region event).
+        Traffic and data roles must both be handled — in a safe order.
+      </p>
+
+      <div class="timeline">
+        <div class="tl-step danger">
+          <div class="n">01</div>
+          <div>
+            <div class="phase">Detect</div>
+            <h4>Something is wrong</h4>
+            <p>
+              Health checks fail, alerts fire, or on-call sees errors.
+              Confirm: is it “app only” or “DB writer dead / unreachable”?
+              App-only ⇒ maybe no promote. Writer dead ⇒ promote path.
+            </p>
+          </div>
+        </div>
+        <div class="tl-step warn">
+          <div class="n">02</div>
+          <div>
+            <div class="phase">Decide</div>
+            <h4>Declare failover · pick RPO you will accept</h4>
+            <p>
+              Check replica lag on B if you can. Huge lag ⇒ more data loss.
+              Decision is deliberate: promote B, or wait for A if RTO allows.
+            </p>
+          </div>
+        </div>
+        <div class="tl-step">
+          <div class="n">03</div>
+          <div>
+            <div class="phase">Fence</div>
+            <h4>Stop A from writing · before or with promote</h4>
+            <p>
+              Power off / stop Postgres / block SG / revoke writer DNS on A.
+              Goal: A must not accept commits after B becomes primary.
+              This step prevents split-brain.
+            </p>
+          </div>
+        </div>
+        <div class="tl-step">
+          <div class="n">04</div>
+          <div>
+            <div class="phase">Promote</div>
+            <h4>Make B the new primary</h4>
+            <p>
+              Postgres: <code>pg_promote</code> / promote trigger file.
+              Aurora Global: managed promote / detach &amp; promote.
+              B stops replaying and opens for writes.
+            </p>
+          </div>
+        </div>
+        <div class="tl-step">
+          <div class="n">05</div>
+          <div>
+            <div class="phase">Repoint</div>
+            <h4>Apps use B as writer</h4>
+            <p>
+              Update writer endpoint (DNS CNAME, Secrets Manager, config, RDS Proxy target).
+              Bounce or reload pools so connections leave A.
+              Route 53 may already send HTTP traffic to region B — align DB with that.
+            </p>
+          </div>
+        </div>
+        <div class="tl-step">
+          <div class="n">06</div>
+          <div>
+            <div class="phase">Verify</div>
+            <h4>Prove writes · measure loss</h4>
+            <p>
+              Insert a canary row, check <code>/ready</code>, confirm only one writer.
+              Estimate RPO from last applied LSN / missing IDs. Record times for the postmortem.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="before-after">
+        <div class="ba before">
+          <div class="label">Before</div>
+          <h4>Steady state</h4>
+          <div class="role-row"><span class="k">HTTP traffic</span><span class="v">Region A</span></div>
+          <div class="role-row"><span class="k">DB writer</span><span class="v">A primary</span></div>
+          <div class="role-row"><span class="k">DB B</span><span class="v">Replica</span></div>
+          <div class="role-row"><span class="k">Replication</span><span class="v">A → B</span></div>
+        </div>
+        <div class="ba after">
+          <div class="label">After promote</div>
+          <h4>Surviving on B</h4>
+          <div class="role-row"><span class="k">HTTP traffic</span><span class="v">Region B</span></div>
+          <div class="role-row"><span class="k">DB writer</span><span class="v">B primary</span></div>
+          <div class="role-row"><span class="k">DB A</span><span class="v">Fenced / down</span></div>
+          <div class="role-row"><span class="k">Replication</span><span class="v">Paused until rebuild</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="fence">
+      <h2>Fence then promote · why order matters</h2>
+      <p class="section-sub">
+        Promotion without fencing is the classic failure mode: two writers, divergent data, ugly restore.
+      </p>
+
+      <div class="checks">
+        <div class="check">
+          <div class="box">1</div>
+          <div>
+            <h4>Fence old primary</h4>
+            <p>Ensure A cannot take writes (stop instance, kill DB, SG deny 5432, remove from writer DNS).</p>
+          </div>
+        </div>
+        <div class="check">
+          <div class="box">2</div>
+          <div>
+            <h4>Promote standby</h4>
+            <p>B becomes read/write. Confirm <code>pg_is_in_recovery() = false</code> (or cloud console “primary”).</p>
+          </div>
+        </div>
+        <div class="check">
+          <div class="box">3</div>
+          <div>
+            <h4>Repoint applications</h4>
+            <p>Writer connection string / secret → B. Drain old pools. Health checks should require “I am writer” if needed.</p>
+          </div>
+        </div>
+        <div class="check">
+          <div class="box">4</div>
+          <div>
+            <h4>Do not start A as writer again</h4>
+            <p>When A returns, rebuild it as a <strong>replica of B</strong>, then plan failback. Never “just start Postgres on A.”</p>
+          </div>
+        </div>
+      </div>
+
+      <h3>Lab vs managed</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Stack</th>
+              <th>Promote looks like</th>
+              <th>Fence looks like</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>EC2 + Postgres</strong></td>
+              <td><code>pg_promote()</code> or promote trigger on B</td>
+              <td>Stop A instance / stop service / SG deny</td>
+            </tr>
+            <tr>
+              <td><strong>RDS Postgres</strong></td>
+              <td>Promote read replica (API/console)</td>
+              <td>Old primary becomes standalone — don’t write to both</td>
+            </tr>
+            <tr>
+              <td><strong>Aurora Global</strong></td>
+              <td>Managed regional promote / failover API</td>
+              <td>Service coordinates; still verify endpoints</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="split-brain">
+      <h2>Split-brain · what goes wrong</h2>
+      <p class="section-sub">
+        Both A and B accept writes for a while. Each has commits the other never saw.
+      </p>
+
+      <div class="alert">
+        <div class="alert-tag">Anti-pattern</div>
+        <h4>Promote B while A is still writable</h4>
+        <p>
+          Users (or cron jobs, or a cached DNS hit) still write to A.
+          B gets new writes from failed-over traffic. Two histories.
+        </p>
+        <p>
+          <strong>Recovery</strong> is no longer “fail back” — it is merge, pick a winner, or restore from backup.
+          That is why fencing is not optional.
+        </p>
+      </div>
+
+      <h3>DNS vs DB · different switches</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Switch</th>
+              <th>Moves</th>
+              <th>Does not do</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Route 53 / AGA</strong></td>
+              <td>Which region serves HTTP</td>
+              <td>Change who is DB primary</td>
+            </tr>
+            <tr>
+              <td><strong>DB promote</strong></td>
+              <td>Which DB accepts writes</td>
+              <td>Move users by itself</td>
+            </tr>
+            <tr>
+              <td><strong>You need both</strong></td>
+              <td>Aligned traffic + writer</td>
+              <td>Hope they stay in sync unaided</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="sim">
+      <h2>Promote sim</h2>
+      <p class="section-sub">
+        Step through an incident. Watch writer role move — and when fencing matters.
+      </p>
+
+      <div class="sim">
+        <div class="sim-controls" role="group" aria-label="Promotion stages">
+          <button type="button" class="active" data-stage="steady">Steady</button>
+          <button type="button" data-stage="incident">A dies</button>
+          <button type="button" data-stage="unsafe">Unsafe promote</button>
+          <button type="button" data-stage="fenced">Fence + promote</button>
+          <button type="button" data-stage="repoint">Repoint apps</button>
+          <button type="button" data-stage="rebuild">Rebuild A as replica</button>
+        </div>
+
+        <div class="sim-grid">
+          <div class="sim-db a" id="sim-a">
+            <div class="name">Region A · DB</div>
+            <div class="pill writer" id="pill-a">Primary · writer</div>
+            <p id="detail-a" style="margin:0;font-size:0.85rem;color:var(--muted);">Accepting writes · shipping WAL to B</p>
+          </div>
+          <div class="sim-db b" id="sim-b">
+            <div class="name">Region B · DB</div>
+            <div class="pill replica" id="pill-b">Replica</div>
+            <p id="detail-b" style="margin:0;font-size:0.85rem;color:var(--muted);">Read-only · applying replication</p>
+          </div>
+          <p class="sim-note" id="sim-note">
+            <strong>Steady state.</strong> One writer (A). B is replica. HTTP and DB both prefer A.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="failback">
+      <h2>Failback · returning home</h2>
+      <p class="section-sub">
+        Living on B is fine until you choose to return. Failback is a planned promote in reverse — not “turn A back on.”
+      </p>
+
+      <div class="checks">
+        <div class="check">
+          <div class="box">1</div>
+          <div>
+            <h4>Rebuild A from B</h4>
+            <p>Basebackup / new replica / Aurora secondary — A must follow B as source of truth.</p>
+          </div>
+        </div>
+        <div class="check">
+          <div class="box">2</div>
+          <div>
+            <h4>Catch up · lag ≈ 0</h4>
+            <p>Wait until replication is healthy. Schedule a maintenance window.</p>
+          </div>
+        </div>
+        <div class="check">
+          <div class="box">3</div>
+          <div>
+            <h4>Fence B briefly · promote A (or planned switchover)</h4>
+            <p>Same rules: only one writer. Managed DBs often have “switchover” for planned failback.</p>
+          </div>
+        </div>
+        <div class="check">
+          <div class="box">4</div>
+          <div>
+            <h4>Repoint apps + DNS to A</h4>
+            <p>Verify, then leave B as replica again. Update runbooks with real timings from the drill.</p>
+          </div>
+        </div>
+      </div>
+
+      <h3>Senior checklist</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Question</th>
+              <th>Good answer</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Who is writer right now?</strong></td>
+              <td>Dashboard / <code>pg_is_in_recovery</code> / cloud “primary” — single source</td>
+            </tr>
+            <tr>
+              <td><strong>Did we fence the old primary?</strong></td>
+              <td>Yes, before or atomically with promote</td>
+            </tr>
+            <tr>
+              <td><strong>What was RPO?</strong></td>
+              <td>Measured (lag / missing txs), not guessed</td>
+            </tr>
+            <tr>
+              <td><strong>Can A become writer accidentally?</strong></td>
+              <td>No — automation and humans blocked until rebuild</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer>
+      <p>
+        Visual companion for DB failover in
+        <strong style="color: var(--ink);">branch-protection-infra</strong>.
+        See also <a href="./multi-region-health.html">multi-region health &amp; failover</a>.
+      </p>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      const stages = {
+        steady: {
+          a: { pill: "Primary · writer", cls: "pill writer", text: "Accepting writes · shipping WAL to B", opacity: "1" },
+          b: { pill: "Replica", cls: "pill replica", text: "Read-only · applying replication", opacity: "1" },
+          note: "<strong>Steady state.</strong> One writer (A). B is replica. HTTP and DB both prefer A.",
+        },
+        incident: {
+          a: { pill: "Down", cls: "pill down", text: "Unreachable · no new commits", opacity: "0.55" },
+          b: { pill: "Replica (stale risk)", cls: "pill replica", text: "Still read-only · last applied LSN = RPO edge", opacity: "1" },
+          note: "<strong>A dies.</strong> DNS may flip HTTP to B, but B is still a replica — writes fail until promote.",
+        },
+        unsafe: {
+          a: { pill: "Still writable?!", cls: "pill down", text: "Came back or never fenced · still accepting writes", opacity: "0.85" },
+          b: { pill: "Also writer", cls: "pill writer", text: "Promoted without fencing A", opacity: "1" },
+          note: "<strong>Split-brain.</strong> Two writers. Divergent data. Avoid this path — fence first.",
+        },
+        fenced: {
+          a: { pill: "Fenced", cls: "pill fenced", text: "Stopped / SG denied / no writer role", opacity: "0.5" },
+          b: { pill: "Primary · writer", cls: "pill writer", text: "Promoted · accepting writes", opacity: "1" },
+          note: "<strong>Safe promote.</strong> A cannot write. B is sole primary. Next: repoint app connection strings.",
+        },
+        repoint: {
+          a: { pill: "Fenced", cls: "pill fenced", text: "Out of the write path", opacity: "0.5" },
+          b: { pill: "Primary · writer", cls: "pill writer", text: "Apps + HTTP + DB all on B", opacity: "1" },
+          note: "<strong>Repointed.</strong> Secrets/DNS/pools use B. Verify canary write and single-writer check.",
+        },
+        rebuild: {
+          a: { pill: "Replica of B", cls: "pill replica", text: "Rebuilt · following new source of truth", opacity: "1" },
+          b: { pill: "Primary · writer", cls: "pill writer", text: "Still writer until planned failback", opacity: "1" },
+          note: "<strong>Ready for failback later.</strong> A is replica again. Switchover to A only when lag is healthy and planned.",
+        },
+      };
+
+      const pillA = document.getElementById("pill-a");
+      const pillB = document.getElementById("pill-b");
+      const detailA = document.getElementById("detail-a");
+      const detailB = document.getElementById("detail-b");
+      const note = document.getElementById("sim-note");
+      const boxA = document.getElementById("sim-a");
+      const boxB = document.getElementById("sim-b");
+
+      function apply(key) {
+        const s = stages[key];
+        pillA.textContent = s.a.pill;
+        pillA.className = s.a.cls;
+        detailA.textContent = s.a.text;
+        boxA.style.opacity = s.a.opacity;
+
+        pillB.textContent = s.b.pill;
+        pillB.className = s.b.cls;
+        detailB.textContent = s.b.text;
+        boxB.style.opacity = s.b.opacity;
+
+        note.innerHTML = s.note;
+      }
+
+      document.querySelectorAll(".sim-controls button").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          document.querySelectorAll(".sim-controls button").forEach(function (b) {
+            b.classList.remove("active");
+          });
+          btn.classList.add("active");
+          apply(btn.getAttribute("data-stage"));
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
