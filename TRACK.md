@@ -16,9 +16,10 @@ This repository is **only Track B**. It is the higher-cost GitOps path (shared c
 ## Out of scope (Track A)
 
 - Single EC2 + Docker Compose as primary runtime
+- Day-to-day **incident / failover / fence-before-promote** drills (EC2 + RDS)
 - “Cheap idle = stop one VM” as the main cost story (here: idle nodes + NAT; EKS control plane still bills)
 
-→ Use [`sockshop-ec2-lab`](https://github.com/Bui-Hong-Kong/sockshop-ec2-lab) (**Track A**).
+→ Use [`sockshop-ec2-lab`](https://github.com/Bui-Hong-Kong/sockshop-ec2-lab) (**Track A**) for runtime + game days.
 
 ## App repo wiring
 
@@ -30,4 +31,4 @@ This repository is **only Track B**. It is the higher-cost GitOps path (shared c
 
 ## Cost warning
 
-EKS control plane + NAT + nodes + ALBs dominate spend. Prefer Track A for daily practice; use Track B for multi-env / GitOps drills, then idle or destroy.
+EKS control plane + NAT + nodes + ALBs dominate spend. Prefer **Track A** for daily practice and **incident / failover game days**; use Track B for multi-env / GitOps drills, then idle or destroy.
