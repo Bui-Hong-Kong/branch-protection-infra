@@ -1,19 +1,26 @@
-# branch-protection-infra
+# branch-protection-infra · **Track B**
 
-Terraform / infrastructure repo for the **branch-protection** lab (org `Bui-Hong-Kong`).
+Terraform for the **multi-env EKS** Sock Shop lab (org `Bui-Hong-Kong`).
 
-This repository holds **infrastructure-as-code only**. Application code lives in [`branch-protection`](https://github.com/Bui-Hong-Kong/branch-protection).
+> **Track split:** This repo = **Track B** (EKS × 3 namespaces — higher cost).  
+> Simple EC2 + Compose + RDS = **Track A** → [`sockshop-ec2-lab`](https://github.com/Bui-Hong-Kong/sockshop-ec2-lab)  
+> Details: [`TRACK.md`](TRACK.md)
 
-## Scope
+**IaC only.** Application code: [`branch-protection`](https://github.com/Bui-Hong-Kong/branch-protection) (`deploy/helm` + Argo for this track).
+
+## Scope (Track B)
 
 | Area | Notes |
 | --- | --- |
-| ECR | One AWS account; per Sock Shop service × env (`sockshop-<service>-env-1/2/3`) |
+| ECR | Per Sock Shop service × env (`sockshop-<service>-env-1/2/3`) |
 | Platform | Shared **1 VPC + 1 EKS** + catalogue **RDS MySQL (single-AZ)** + Secrets Manager |
-| State | Remote: S3 bucket and S3 lockfile (bucket created by `bootstrap/`) |
-| Image flow | Push → env-1 (dev); copy → env-2 (UAT); copy → env-3 (prod) via shared `gha-copy` |
-| Workloads | Platform installs ALB controller + Argo CD + app namespaces; **app manifests / Argo Applications** live in the app repo |
-| CI | PR checks for Terraform; apply only via manual workflow on `main` |
+| Namespaces | `sockshop-dev` / `sockshop-uat` / `sockshop-prod` |
+| Catalogue DBs | Logical DBs `socksdb_dev` / `socksdb_uat` / `socksdb_prod` on one RDS |
+| State | Remote S3 (+ lock) from `bootstrap/` |
+| Image flow | Push env-1 → copy env-2 → copy env-3 (`gha-copy`) |
+| Workloads | ALB controller + Argo CD + namespaces; **Applications** in app repo |
+| CI | PR Terraform checks; manual apply workflow on `main` |
+| Not here | Single-EC2 Compose lab (Track A) |
 
 ## Layout
 
